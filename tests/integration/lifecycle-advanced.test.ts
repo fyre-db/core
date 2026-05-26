@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { firstValueFrom, filter } from 'rxjs';
 import {
   Strata,
   defineEntity,
@@ -113,7 +114,7 @@ describe('Lifecycle advanced integration', () => {
     await strataB.tenants.open(tenant.id);
 
     const repoB = strataB.repo(TaskDef) as Repository<Task>;
-    const entity = repoB.get(id);
+    const entity = await firstValueFrom(repoB.observe(id).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
     expect(entity).toBeDefined();
     expect(entity!.title).toBe('From A');
   });

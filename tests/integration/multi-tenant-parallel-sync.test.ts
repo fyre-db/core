@@ -143,8 +143,9 @@ describe('Multi-tenant parallel sync integration', () => {
     await strataA2.tenants.open(tenantA.id);
 
     const noteRepoA2 = strataA2.repo(NoteDef) as Repository<Note>;
+    const dataA2 = await firstValueFrom(noteRepoA2.observeQuery().pipe(filter(arr => arr.length > 0)));
     expect(noteRepoA2.get(idB1)).toBeUndefined();
-    expect(noteRepoA2.query()).toHaveLength(2);
+    expect(dataA2).toHaveLength(2);
     expect(noteRepoA2.get(idA1)!.title).toBe('Note in A');
   });
 
@@ -231,6 +232,7 @@ describe('Multi-tenant parallel sync integration', () => {
     await strataB.tenants.open(tenant.id);
 
     const repoB = strataB.repo(NoteDef) as Repository<Note>;
+    await firstValueFrom(repoB.observe(sharedId).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
     expect(repoB.get(sharedId)!.title).toBe('Original');
 
     // Both write in parallel (different values, different timestamps)
@@ -296,9 +298,15 @@ describe('Multi-tenant parallel sync integration', () => {
       'note._.ext-a': externalNote,
     });
 
-    // Switch back to tenant A — re-load triggers cloud hydration
+    // Switch back to tenant A — lazy load from local, then sync to get cloud changes
     await strata.tenants.open(tenantA.id);
     const noteRepoA2 = strata.repo(NoteDef) as Repository<Note>;
+
+    // First trigger lazy load so partition is in memory
+    await firstValueFrom(noteRepoA2.observeQuery().pipe(filter(arr => arr.length >= 1)));
+
+    // Sync to pick up external cloud mutation
+    await strata.tenants.sync();
 
     // Should see both the original note and the externally injected one
     const all = noteRepoA2.query();
@@ -398,7 +406,9 @@ describe('Multi-tenant parallel sync integration', () => {
     const noteRepoB = strataB.repo(NoteDef) as Repository<Note>;
     const projectRepoB = strataB.repo(ProjectDef) as Repository<Project>;
 
-    // B should have A's data
+    // B should have A's data after lazy load
+    await firstValueFrom(noteRepoB.observe(noteIdA).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
+    await firstValueFrom(projectRepoB.observe(projIdA).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
     expect(noteRepoB.get(noteIdA)!.title).toBe('A note');
     expect(projectRepoB.get(projIdA)!.name).toBe('Project Alpha');
 

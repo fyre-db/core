@@ -81,6 +81,11 @@ export type SyncEngine = {
     tenant: Tenant | undefined,
     steps: ReadonlyArray<[SyncLocation, SyncLocation]>,
   ): Promise<SyncBetweenResult[]>;
+  ensurePartition(
+    tenant: Tenant | undefined,
+    entityName: string,
+    partitionKey: string,
+  ): Promise<void>;
   startScheduler(
     tenant: Tenant | undefined,
     hasCloud: boolean,

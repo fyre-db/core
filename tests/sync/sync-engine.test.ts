@@ -271,9 +271,9 @@ describe('SyncEngine', () => {
       task: { '_': { hash: 777, count: 1, deletedCount: 0, updatedAt: 500 } },
     }, DEFAULT_OPTIONS);
 
-    // local→memory: changesForB = changes applied to target (memory)
-    const { result } = await engine.sync('local', 'memory', undefined);
-    expect(result.changesForB.length).toBeGreaterThan(0);
+    // Lazy hydration: ensurePartition cascades from local to memory
+    await engine.ensurePartition(undefined, 'task', '_');
+    expect(changedEntities).toContain('task');
   });
 
   it('dispose rejects pending queue items', async () => {

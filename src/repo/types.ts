@@ -2,6 +2,7 @@ import type { Observable } from 'rxjs';
 import type { BaseEntity } from '@/schema';
 
 export type QueryOptions<T> = {
+  readonly keys?: readonly string[];
   readonly where?: Partial<T>;
   readonly range?: {
     readonly field: keyof T;

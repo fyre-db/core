@@ -15,8 +15,9 @@ export class SingletonRepository<T> {
     store: EntityStore,
     hlc: { current: Hlc },
     eventBus: EventBus<EntityEvent>,
+    ensurePartition?: (entityName: string, partitionKey: string) => Promise<void>,
   ) {
-    this.repo = new Repository(definition, store, hlc, eventBus);
+    this.repo = new Repository(definition, store, hlc, eventBus, ensurePartition);
     this.deterministicId = formatEntityId(definition.name, '_', definition.name);
   }
 

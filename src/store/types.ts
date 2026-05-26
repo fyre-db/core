@@ -5,6 +5,7 @@ export type EntityStore = DataAdapter & {
   getEntity(entityKey: string, id: string): unknown;
   setEntity(entityKey: string, id: string, entity: unknown): void;
   deleteEntity(entityKey: string, id: string): boolean;
+  hasPartition(entityKey: string): boolean;
   getPartition(entityKey: string): ReadonlyMap<string, unknown>;
   getAllPartitionKeys(entityName: string): ReadonlyArray<string>;
   getDirtyKeys(): ReadonlySet<string>;

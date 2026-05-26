@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { firstValueFrom, filter } from 'rxjs';
 import {
   Strata,
   defineEntity,
@@ -65,7 +66,7 @@ describe('Two-device sync integration', () => {
     await strataB.tenants.open(tenant.id);
 
     const repoB = strataB.repo(TaskDef) as Repository<Task>;
-    const fromB = repoB.get(id);
+    const fromB = await firstValueFrom(repoB.observe(id).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
 
     expect(fromB).toBeDefined();
     expect(fromB!.title).toBe('From A');
@@ -98,7 +99,7 @@ describe('Two-device sync integration', () => {
     await strataB.tenants.open(tenant.id);
 
     const repoB = strataB.repo(TaskDef) as Repository<Task>;
-    expect(repoB.get(id)).toBeDefined();
+    await firstValueFrom(repoB.observe(id).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
 
     // Device A edits (earlier timestamp)
     repoA.save({ title: 'Edit from A', done: false, priority: 2, id } as Task & { id: string });
@@ -145,7 +146,7 @@ describe('Two-device sync integration', () => {
     await strataB.tenants.open(tenant.id);
 
     const repoB = strataB.repo(TaskDef) as Repository<Task>;
-    expect(repoB.get(id)).toBeDefined();
+    await firstValueFrom(repoB.observe(id).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
 
     // A deletes entity, syncs
     repoA.delete(id);
@@ -183,7 +184,7 @@ describe('Two-device sync integration', () => {
     await strataB.tenants.open(tenant.id);
 
     const repoB = strataB.repo(TaskDef) as Repository<Task>;
-    expect(repoB.get(id)).toBeDefined();
+    await firstValueFrom(repoB.observe(id).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
 
     // B deletes (later HLC)
     await new Promise(r => setTimeout(r, 5));

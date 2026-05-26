@@ -116,11 +116,14 @@ export class Strata {
     );
     this.dirtyTracker = new ReactiveFlag();
 
+    const ensurePartition = (entityName: string, partitionKey: string) =>
+      this.syncEngine.ensurePartition(this.tenantContext.activeTenant, entityName, partitionKey);
+
     for (const def of config.entities) {
       if (def.keyStrategy.kind === 'singleton') {
-        this.repoMap.set(def.name, new SingletonRepository(def, store, this.hlcRef, this.eventBus));
+        this.repoMap.set(def.name, new SingletonRepository(def, store, this.hlcRef, this.eventBus, ensurePartition));
       } else {
-        this.repoMap.set(def.name, new Repository(def, store, this.hlcRef, this.eventBus));
+        this.repoMap.set(def.name, new Repository(def, store, this.hlcRef, this.eventBus, ensurePartition));
       }
     }
 

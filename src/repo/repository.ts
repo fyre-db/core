@@ -3,7 +3,7 @@ import type { Hlc } from '@/hlc';
 import { tick } from '@/hlc';
 import type { EntityDefinition, BaseEntity } from '@/schema';
 import { formatEntityId } from '@/schema';
-import { generateId, parseEntityKey } from '@/utils';
+import { generateId, parseEntityKey, parseCompositeKey } from '@/utils';
 import type { EventBus } from '@/reactive';
 import type { EntityEvent } from '@/reactive';
 import { filter } from 'rxjs/operators';
@@ -42,10 +42,12 @@ export class Repository<T> {
     private readonly store: EntityStore,
     private readonly hlc: { current: Hlc },
     private readonly eventBus: EventBus<EntityEvent>,
+    private readonly ensurePartition?: (entityName: string, partitionKey: string) => Promise<void>,
   ) {}
 
   get(id: string): (T & BaseEntity) | undefined {
     const entityKey = parseEntityKey(id);
+    this.triggerEnsureById(entityKey);
     return this.store.getEntity(entityKey, id) as (T & BaseEntity) | undefined;
   }
 
@@ -148,7 +150,11 @@ export class Repository<T> {
   }
 
   query(opts?: QueryOptions<T>): ReadonlyArray<T & BaseEntity> {
-    const partitionKeys = this.store.getAllPartitionKeys(this.definition.name);
+    this.triggerEnsureForQuery(opts);
+
+    const partitionKeys = opts?.keys
+      ? opts.keys.map(k => `${this.definition.name}.${k}`)
+      : this.store.getAllPartitionKeys(this.definition.name);
 
     const collected: (T & BaseEntity)[] = [];
     for (const key of partitionKeys) {
@@ -186,6 +192,8 @@ export class Repository<T> {
 
   observe(id: string) {
     assertNotDisposed(this.disposed, 'Repository');
+    const entityKey = parseEntityKey(id);
+    this.triggerEnsureById(entityKey);
     return this.eventBus.all$.pipe(
       filter((e: EntityEvent) => e.entityName === this.definition.name),
       startWith(undefined),
@@ -196,6 +204,7 @@ export class Repository<T> {
 
   observeQuery(opts?: QueryOptions<T>) {
     assertNotDisposed(this.disposed, 'Repository');
+    this.triggerEnsureForQuery(opts);
     return this.eventBus.all$.pipe(
       filter((e: EntityEvent) => e.entityName === this.definition.name),
       startWith(undefined),
@@ -208,5 +217,25 @@ export class Repository<T> {
     if (this.disposed) return;
     this.disposed = true;
     log.repo('disposed %s repository', this.definition.name);
+  }
+
+  private triggerEnsureById(entityKey: string): void {
+    if (!this.ensurePartition) return;
+    const parsed = parseCompositeKey(entityKey);
+    if (!parsed) return;
+    void this.ensurePartition(this.definition.name, parsed.rest);
+  }
+
+  private triggerEnsureForQuery(opts?: QueryOptions<T>): void {
+    if (!this.ensurePartition) return;
+    if (opts?.keys) {
+      for (const key of opts.keys) {
+        void this.ensurePartition(this.definition.name, key);
+      }
+      return;
+    }
+    if (this.definition.keyStrategy.kind !== 'partitioned') {
+      void this.ensurePartition(this.definition.name, '_');
+    }
   }
 }

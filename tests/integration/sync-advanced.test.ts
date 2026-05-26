@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, filter } from 'rxjs';
 import {
   Strata,
   defineEntity,
@@ -63,14 +63,17 @@ describe('Sync advanced integration', () => {
     // Start failing after create so marker blob can be written
     (failingCloud as StorageAdapter & { startFailing(): void }).startFailing();
 
-    // Load tenant — cloud hydrate will fail, should fall back to local
+    // Load tenant — open is now lazy (no eager cloud sync)
     await strata.tenants.open(tenant.id);
 
-    // Should have emitted sync-failed for cloud
-    expect(events.some(e => e.type === 'sync-failed' && e.error?.message === 'Cloud unreachable')).toBe(true);
-
-    // Should still work in local-only mode
+    // Trigger lazy load — this will attempt to read from cloud and fail
     const repo = strata.repo(TaskDef) as Repository<Task>;
+    repo.query();
+    // Wait for ensurePartition to complete (and fail)
+    await new Promise(r => setTimeout(r, 50));
+
+    // Should have emitted sync-failed for cloud
+    expect(events.some(e => e.type === 'sync-failed')).toBe(true);
     const id = repo.save({ title: 'Local', done: false, priority: 1 });
     expect(repo.get(id)?.title).toBe('Local');
   });
@@ -196,7 +199,7 @@ describe('Sync advanced integration', () => {
 
     // B's observe should emit the entity from A
     const repoB = strataB.repo(TaskDef) as Repository<Task>;
-    const entity = await firstValueFrom(repoB.observe(id));
+    const entity = await firstValueFrom(repoB.observe(id).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
 
     expect(entity).toBeDefined();
     expect(entity!.title).toBe('From A');

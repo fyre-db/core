@@ -207,7 +207,16 @@ export class TenantManager implements TenantManagerType {
         throw new TenantError('Credential required for encrypted tenant', { kind: 'credential-required' });
       }
       try {
-        const rawBytes = await this.deps.rawAdapter.read(tenant, this.deps.options.markerKey);
+        // Ensure the marker blob is available locally (pull from cloud if needed)
+        // so that deriveKeys has the encryption envelope to work with.
+        let rawBytes = await this.deps.rawAdapter.read(tenant, this.deps.options.markerKey);
+        if (!rawBytes && this.deps.rawCloudAdapter) {
+          const cloudBytes = await this.deps.rawCloudAdapter.read(tenant, this.deps.options.markerKey);
+          if (cloudBytes) {
+            await this.deps.rawAdapter.write(tenant, this.deps.options.markerKey, cloudBytes);
+            rawBytes = cloudBytes;
+          }
+        }
         keys = await this.deps.encryptionService.deriveKeys(opts.credential, this.deps.appId, rawBytes);
         this.deps.tenantContext.set(tenant, keys);
         const marker = await readMarkerBlob(this.deps.adapter, tenant, this.deps.options);
@@ -223,16 +232,10 @@ export class TenantManager implements TenantManagerType {
       this.deps.tenantContext.set(tenant, keys);
     }
 
-    // Hydrate: cloud → local → memory
+    // Lazy hydration: skip eager cloud→local and local→memory syncs.
+    // Partitions load on demand via SyncEngine.ensurePartition when
+    // repositories access data. Periodic syncs filter by loaded partitions.
     const hasCloud = !!this.deps.cloudAdapter;
-    if (hasCloud) {
-      try {
-        await this.deps.syncEngine.run(tenant, [['cloud', 'local']]);
-      } catch {
-        this.deps.syncEventBus.emit({ type: 'sync-failed', source: 'local', target: 'cloud', error: new SyncError('Cloud unreachable', { kind: 'sync-failed' }) });
-      }
-    }
-    await this.deps.syncEngine.run(tenant, [['local', 'memory']]);
 
     // Start scheduler
     this.deps.syncEngine.startScheduler(tenant, hasCloud, this.deps.dirtyTracker);

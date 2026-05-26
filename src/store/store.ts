@@ -48,6 +48,10 @@ export class Store implements EntityStore {
     return deleted;
   }
 
+  hasPartition(entityKey: string): boolean {
+    return this.partitions.has(entityKey);
+  }
+
   getPartition(entityKey: string): ReadonlyMap<string, unknown> {
     return this.partitions.get(entityKey) ?? new Map<string, unknown>();
   }

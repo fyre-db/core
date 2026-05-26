@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { firstValueFrom, filter } from 'rxjs';
 import {
   Strata,
   validateEntityDefinitions,
@@ -290,7 +291,12 @@ describe('Strata', () => {
       });
       await strata.tenants.open(tenant.id);
 
-      expect(events.some(e => e.type === 'sync-failed' && e.error?.message === 'Cloud unreachable')).toBe(true);
+      // Trigger lazy load — cloud failure happens on first access, not during open()
+      const repo = strata.repo(taskDef) as Repository<Task>;
+      repo.query();
+      await new Promise(r => setTimeout(r, 50));
+
+      expect(events.some(e => e.type === 'sync-failed')).toBe(true);
     });
   });
 
@@ -690,7 +696,7 @@ describe('Strata', () => {
       });
       await strata2.tenants.open(tenant.id, { credential: 'newpass' });
       const repo2 = strata2.repo(taskDef) as Repository<Task>;
-      const tasks = repo2.query();
+      const tasks = await firstValueFrom(repo2.observeQuery().pipe(filter(arr => arr.length > 0)));
       expect(tasks).toHaveLength(1);
       expect(tasks[0].title).toBe('Secret');
       await strata2.dispose();

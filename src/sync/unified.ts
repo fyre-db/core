@@ -2,7 +2,7 @@ import type { Tenant } from '@/adapter';
 import { partitionBlobKey } from '@/adapter';
 import type { Hlc } from '@/hlc';
 import { compareHlc } from '@/hlc';
-import type { AllIndexes, PartitionBlob, PartitionIndexEntry, DataAdapter } from '@/persistence';
+import type { AllIndexes, PartitionBlob, PartitionIndex, PartitionIndexEntry, DataAdapter } from '@/persistence';
 import { loadAllIndexes, saveAllIndexes } from '@/persistence';
 import { partitionHash, updatePartitionIndexEntry } from '@/persistence';
 import type { BlobMigration } from '@/schema/migration';
@@ -12,6 +12,8 @@ import { diffPartitions } from './diff';
 import { mergePartition } from './merge';
 import type { SyncEntity, SyncEntityChange, SyncBetweenResult } from './types';
 import { log } from '@/log';
+
+export type PartitionFilter = (entityName: string, partitionKey: string) => boolean;
 
 type SyncChange = {
   readonly entityName: string;
@@ -28,6 +30,20 @@ type SyncPlan = {
 
 // ─── Phase 1: Build plan ─────────────────────────────────
 
+function filterIndex(
+  index: PartitionIndex,
+  entityName: string,
+  partitionFilter: PartitionFilter,
+): PartitionIndex {
+  const filtered: PartitionIndex = {};
+  for (const key of Object.keys(index)) {
+    if (partitionFilter(entityName, key)) {
+      filtered[key] = index[key];
+    }
+  }
+  return filtered;
+}
+
 async function buildPlan(
   adapterA: DataAdapter,
   adapterB: DataAdapter,
@@ -35,6 +51,7 @@ async function buildPlan(
   tenant: Tenant | undefined,
   options: ResolvedStrataOptions,
   migrations?: ReadonlyArray<BlobMigration>,
+  partitionFilter?: PartitionFilter,
 ): Promise<SyncPlan> {
   const [indexesA, indexesB] = await Promise.all([
     loadAllIndexes(adapterA, tenant, options),
@@ -45,8 +62,12 @@ async function buildPlan(
   const applyToB: SyncChange[] = [];
 
   for (const entityName of entityNames) {
-    const indexA = indexesA[entityName] ?? {};
-    const indexB = indexesB[entityName] ?? {};
+    let indexA = indexesA[entityName] ?? {};
+    let indexB = indexesB[entityName] ?? {};
+    if (partitionFilter) {
+      indexA = filterIndex(indexA, entityName, partitionFilter);
+      indexB = filterIndex(indexB, entityName, partitionFilter);
+    }
     const diff = diffPartitions(indexA, indexB);
 
     await planCopies(
@@ -265,8 +286,9 @@ export async function syncBetween(
   tenant: Tenant | undefined,
   options: ResolvedStrataOptions,
   migrations?: ReadonlyArray<BlobMigration>,
+  partitionFilter?: PartitionFilter,
 ): Promise<SyncBetweenResult> {
-  const plan = await buildPlan(adapterA, adapterB, entityNames, tenant, options, migrations);
+  const plan = await buildPlan(adapterA, adapterB, entityNames, tenant, options, migrations, partitionFilter);
 
   if (plan.applyToB.length === 0 && plan.applyToA.length === 0) {
     return { changesForA: [], changesForB: [], stale: false, maxHlc: undefined };

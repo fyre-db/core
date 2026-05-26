@@ -1,4 +1,5 @@
 import type { Tenant } from '@/adapter';
+import { partitionBlobKey } from '@/adapter';
 import type { Hlc } from '@/hlc';
 import { tick } from '@/hlc';
 import type { EventBus } from '@/reactive';
@@ -6,6 +7,7 @@ import type { EntityEvent } from '@/reactive';
 import type { EntityStore } from '@/store';
 import type { BlobMigration } from '@/schema/migration';
 import type { DataAdapter } from '@/persistence';
+import { loadAllIndexes } from '@/persistence';
 import { parseCompositeKey } from '@/utils';
 import type { ReactiveFlag } from '@/utils';
 import type { ResolvedStrataOptions } from '../options';
@@ -17,6 +19,7 @@ import type {
   SyncEntityChange,
 } from './types';
 import { syncBetween } from './unified';
+import type { PartitionFilter } from './unified';
 import { log } from '@/log';
 
 export class SyncEngine {
@@ -24,6 +27,7 @@ export class SyncEngine {
   private running = false;
   private disposed = false;
   private inFlight: Promise<void> | null = null;
+  private readonly inFlightPartitions = new Map<string, Promise<void>>();
 
   constructor(
     private readonly store: EntityStore,
@@ -77,11 +81,12 @@ export class SyncEngine {
     const fn = async () => {
       const sourceAdapter = this.resolveAdapter(source);
       const targetAdapter = this.resolveAdapter(target);
+      const partitionFilter = await this.deriveFilter(source, target, tenant);
       this.syncEventBus.emit({ type: 'sync-started', source, target });
       try {
         syncResult = await syncBetween(
           sourceAdapter, targetAdapter, this.entityNames, tenant,
-          this.options, this.migrations,
+          this.options, this.migrations, partitionFilter,
         );
 
         if (syncResult.maxHlc) {
@@ -169,6 +174,9 @@ export class SyncEngine {
     hasCloud: boolean,
     dirtyTracker?: ReactiveFlag,
   ): void {
+    if (this.disposed) {
+      throw new SyncError('SyncEngine is disposed', { kind: 'sync-failed' });
+    }
     this.stopScheduler();
 
     this.localTimer = setInterval(() => {
@@ -206,6 +214,101 @@ export class SyncEngine {
       clearInterval(this.cloudTimer);
       this.cloudTimer = null;
     }
+  }
+
+  // ── Lazy hydration ─────────────────────────────────────
+
+  async ensurePartition(
+    tenant: Tenant | undefined,
+    entityName: string,
+    partitionKey: string,
+  ): Promise<void> {
+    const entityKey = partitionBlobKey(entityName, partitionKey);
+    if (this.store.hasPartition(entityKey)) return;
+
+    const existing = this.inFlightPartitions.get(entityKey);
+    if (existing) { await existing; return; }
+
+    const work = this.cascadeLoad(tenant, entityName, partitionKey, entityKey);
+    this.inFlightPartitions.set(entityKey, work);
+    try { await work; } finally { this.inFlightPartitions.delete(entityKey); }
+  }
+
+  private async cascadeLoad(
+    tenant: Tenant | undefined,
+    entityName: string,
+    partitionKey: string,
+    entityKey: string,
+  ): Promise<void> {
+    // Try local first
+    const localIndexes = await loadAllIndexes(this.localAdapter, tenant, this.options);
+    if (localIndexes[entityName]?.[partitionKey]) {
+      const blob = await this.localAdapter.read(tenant, entityKey);
+      if (blob) {
+        await this.store.write(tenant, entityKey, blob);
+        this.emitEntityChangesFromBlob(entityName, blob);
+        log.sync('lazy-loaded %s from local', entityKey);
+        return;
+      }
+    }
+
+    // Try cloud
+    if (this.cloudAdapter) {
+      try {
+        const cloudIndexes = await loadAllIndexes(this.cloudAdapter, tenant, this.options);
+        if (cloudIndexes[entityName]?.[partitionKey]) {
+          const blob = await this.cloudAdapter.read(tenant, entityKey);
+          if (blob) {
+            await this.localAdapter.write(tenant, entityKey, blob);
+            await this.store.write(tenant, entityKey, blob);
+            this.emitEntityChangesFromBlob(entityName, blob);
+            log.sync('lazy-loaded %s from cloud', entityKey);
+            return;
+          }
+        }
+      } catch (err) {
+        const error = err instanceof Error ? err : new StrataError(String(err), { kind: 'unknown' });
+        this.syncEventBus.emit({ type: 'sync-failed', source: 'local', target: 'cloud', error });
+        log.sync.error('lazy-load %s from cloud failed: %O', entityKey, err);
+      }
+    }
+
+    log.sync('lazy-load %s: not found in any tier', entityKey);
+  }
+
+  private emitEntityChangesFromBlob(
+    entityName: string,
+    blob: Record<string, unknown>,
+  ): void {
+    const entities = (blob[entityName] as Record<string, unknown> | undefined) ?? {};
+    const deletedSection = blob['deleted'] as Record<string, Record<string, unknown>> | undefined;
+    const tombstones = deletedSection?.[entityName] ?? {};
+    this.entityEventBus.emit({
+      entityName,
+      source: 'sync',
+      updates: Object.keys(entities),
+      deletes: Object.keys(tombstones),
+    });
+  }
+
+  private async deriveFilter(
+    source: SyncLocation,
+    target: SyncLocation,
+    tenant: Tenant | undefined,
+  ): Promise<PartitionFilter | undefined> {
+    const memoryInvolved = source === 'memory' || target === 'memory';
+    const cloudInvolved = source === 'cloud' || target === 'cloud';
+
+    if (memoryInvolved) {
+      return (entityName, partitionKey) =>
+        this.store.hasPartition(partitionBlobKey(entityName, partitionKey));
+    }
+    if (cloudInvolved) {
+      const localIndexes = await loadAllIndexes(this.localAdapter, tenant, this.options);
+      return (entityName, partitionKey) =>
+        !!(localIndexes[entityName]?.[partitionKey]);
+    }
+    return undefined;
   }
 
   async dispose(): Promise<void> {

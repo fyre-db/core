@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { firstValueFrom, filter } from 'rxjs';
 import {
   Strata,
   defineEntity,
@@ -62,8 +63,8 @@ describe('Full lifecycle integration', () => {
     await strata2.tenants.open(tenant.id);
 
     const repo2 = strata2.repo(TaskDef) as Repository<Task>;
-    const loaded1 = repo2.get(id1);
-    const loaded2 = repo2.get(id2);
+    const loaded1 = await firstValueFrom(repo2.observe(id1).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
+    const loaded2 = await firstValueFrom(repo2.observe(id2).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
 
     expect(loaded1).toBeDefined();
     expect(loaded1!.title).toBe('Buy groceries');
@@ -103,7 +104,7 @@ describe('Full lifecycle integration', () => {
     }));
     await strata2.tenants.open(tenant.id);
     const repo2 = strata2.repo(TaskDef) as Repository<Task>;
-    const all = repo2.query();
+    const all = await firstValueFrom(repo2.observeQuery().pipe(filter(arr => arr.length > 0)));
     expect(all).toHaveLength(1);
     expect(all[0].title).toBe('Urgent');
   });
@@ -194,9 +195,12 @@ describe('Full lifecycle integration', () => {
     const taskRepo2 = strata2.repo(TaskDef) as Repository<Task>;
     const settingsRepo2 = strata2.repo(SettingsDef) as SingletonRepository<Settings>;
 
-    expect(taskRepo2.get(taskId)?.title).toBe('Task1');
-    expect(settingsRepo2.get()?.theme).toBe('dark');
-    expect(settingsRepo2.get()?.fontSize).toBe(14);
+    const loadedTask = await firstValueFrom(taskRepo2.observe(taskId).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
+    const loadedSettings = await firstValueFrom(settingsRepo2.observe().pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
+
+    expect(loadedTask?.title).toBe('Task1');
+    expect(loadedSettings?.theme).toBe('dark');
+    expect(loadedSettings?.fontSize).toBe(14);
   });
 
   it('partitioned entities survive dispose → reload', async () => {
@@ -227,8 +231,8 @@ describe('Full lifecycle integration', () => {
     await strata2.tenants.open(tenant.id);
 
     const repo2 = strata2.repo(EventDef) as Repository<Event>;
-    const loaded1 = repo2.get(id1);
-    const loaded2 = repo2.get(id2);
+    const loaded1 = await firstValueFrom(repo2.observe(id1).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
+    const loaded2 = await firstValueFrom(repo2.observe(id2).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
 
     expect(loaded1?.name).toBe('Concert');
     expect(loaded1?.category).toBe('music');
