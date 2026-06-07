@@ -1,23 +1,5 @@
-import type { Tenant } from '@/adapter';
-import type { AllIndexes, PartitionIndex, PartitionIndexEntry, DataAdapter } from '@/persistence';
-import { loadAllIndexes } from '@/persistence';
-import type { ResolvedStrataOptions } from '../options';
+import type { PartitionIndex, PartitionIndexEntry } from '@/persistence';
 import type { PartitionDiffResult } from './types';
-import { log } from '@/log';
-
-export async function loadAllIndexPairs(
-  localAdapter: DataAdapter,
-  cloudAdapter: DataAdapter,
-  tenant: Tenant | undefined,
-  options: ResolvedStrataOptions,
-): Promise<{ localIndexes: AllIndexes; cloudIndexes: AllIndexes }> {
-  const [localIndexes, cloudIndexes] = await Promise.all([
-    loadAllIndexes(localAdapter, tenant, options),
-    loadAllIndexes(cloudAdapter, tenant, options),
-  ]);
-  log.sync('loaded all index pairs');
-  return { localIndexes, cloudIndexes };
-}
 
 export function diffPartitions(
   localIndex: PartitionIndex,

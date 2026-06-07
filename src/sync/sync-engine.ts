@@ -7,7 +7,6 @@ import type { EntityEvent } from '@/reactive';
 import type { EntityStore } from '@/store';
 import type { BlobMigration } from '@/schema/migration';
 import type { DataAdapter } from '@/persistence';
-import { loadAllIndexes } from '@/persistence';
 import { parseCompositeKey } from '@/utils';
 import type { ReactiveFlag } from '@/utils';
 import type { ResolvedStrataOptions } from '../options';
@@ -20,6 +19,7 @@ import type {
 } from './types';
 import { syncBetween } from './unified';
 import type { PartitionFilter } from './unified';
+import { MarkerStore } from './marker-store';
 import { log } from '@/log';
 
 export class SyncEngine {
@@ -28,6 +28,7 @@ export class SyncEngine {
   private disposed = false;
   private inFlight: Promise<void> | null = null;
   private readonly inFlightPartitions = new Map<string, Promise<void>>();
+  private readonly markerStore: MarkerStore;
 
   constructor(
     private readonly store: EntityStore,
@@ -39,7 +40,9 @@ export class SyncEngine {
     private readonly syncEventBus: EventBus<SyncEvent>,
     private readonly options: ResolvedStrataOptions,
     private readonly migrations?: ReadonlyArray<BlobMigration>,
-  ) {}
+  ) {
+    this.markerStore = new MarkerStore(this.options);
+  }
 
   private resolveAdapter(loc: SyncLocation): DataAdapter {
     switch (loc) {
@@ -88,6 +91,10 @@ export class SyncEngine {
           sourceAdapter, targetAdapter, this.entityNames, tenant,
           this.options, this.migrations, partitionFilter,
         );
+
+        // unified just rewrote the marker for any persistent tier it touched;
+        // drop the cached indexes so the next read recomputes them.
+        this.invalidateMarkers(source, target, tenant);
 
         if (syncResult.maxHlc) {
           this.hlcRef.current = tick(this.hlcRef.current, syncResult.maxHlc);
@@ -241,7 +248,7 @@ export class SyncEngine {
     entityKey: string,
   ): Promise<void> {
     // Try local first
-    const localIndexes = await loadAllIndexes(this.localAdapter, tenant, this.options);
+    const localIndexes = await this.markerStore.getIndexes('local', this.localAdapter, tenant);
     if (localIndexes[entityName]?.[partitionKey]) {
       const blob = await this.localAdapter.read(tenant, entityKey);
       if (blob) {
@@ -255,7 +262,7 @@ export class SyncEngine {
     // Try cloud
     if (this.cloudAdapter) {
       try {
-        const cloudIndexes = await loadAllIndexes(this.cloudAdapter, tenant, this.options);
+        const cloudIndexes = await this.markerStore.getIndexes('cloud', this.cloudAdapter, tenant);
         if (cloudIndexes[entityName]?.[partitionKey]) {
           const blob = await this.cloudAdapter.read(tenant, entityKey);
           if (blob) {
@@ -304,16 +311,30 @@ export class SyncEngine {
         this.store.hasPartition(partitionBlobKey(entityName, partitionKey));
     }
     if (cloudInvolved) {
-      const localIndexes = await loadAllIndexes(this.localAdapter, tenant, this.options);
+      const localIndexes = await this.markerStore.getIndexes('local', this.localAdapter, tenant);
       return (entityName, partitionKey) =>
         !!(localIndexes[entityName]?.[partitionKey]);
     }
     return undefined;
   }
 
+  /** Invalidate cached markers for the persistent tiers a sync just wrote. */
+  private invalidateMarkers(
+    source: SyncLocation,
+    target: SyncLocation,
+    tenant: Tenant | undefined,
+  ): void {
+    for (const loc of new Set<SyncLocation>([source, target])) {
+      if (loc === 'local' || loc === 'cloud') {
+        this.markerStore.invalidate(loc, tenant);
+      }
+    }
+  }
+
   async dispose(): Promise<void> {
     this.stopScheduler();
     this.disposed = true;
+    this.markerStore.clear();
     for (const item of this.queue) {
       item.reject(new SyncError('SyncEngine disposed', { kind: 'sync-failed' }));
     }
