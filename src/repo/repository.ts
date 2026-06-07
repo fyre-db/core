@@ -118,7 +118,14 @@ export class Repository<T> {
     const entityKey = parseEntityKey(id);
     const entity = this.store.getEntity(entityKey, id) as (T & BaseEntity) | undefined;
     if (entity) {
-      this.store.setTombstone(entityKey, id, entity.hlc);
+      // A delete is a new operation: stamp the tombstone with a freshly ticked
+      // HLC (causally after the entity's own hlc and carrying a current
+      // timestamp). Reusing `entity.hlc` would make the tombstone equal to —
+      // not newer than — the value, and its stale timestamp could be pruned by
+      // tombstone-retention before the delete propagates, resurrecting the row.
+      const nextHlc = tick(this.hlc.current);
+      this.hlc.current = nextHlc;
+      this.store.setTombstone(entityKey, id, nextHlc);
     }
     const deleted = this.store.deleteEntity(entityKey, id);
     if (deleted) {
