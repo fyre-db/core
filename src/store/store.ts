@@ -3,7 +3,7 @@ import type { Tenant } from '@/adapter';
 import type { PartitionBlob } from '@/persistence';
 import { partitionHash } from '@/persistence';
 import { parseCompositeKey } from '@/utils';
-import type { ResolvedStrataOptions } from '../options';
+import type { ResolvedFyreDbOptions } from '../options';
 import type { EntityStore } from './types';
 
 export class Store implements EntityStore {
@@ -15,7 +15,7 @@ export class Store implements EntityStore {
   private readonly systemEntityKey: string;
   private cachedMarkerBlob: PartitionBlob | null = null;
 
-  constructor(options: ResolvedStrataOptions) {
+  constructor(options: ResolvedFyreDbOptions) {
     this.markerKey = options.markerKey;
     this.tombstoneRetentionMs = options.tombstoneRetentionMs;
     this.systemEntityKey = options.systemEntityKey;

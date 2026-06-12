@@ -1,4 +1,4 @@
-import { Strata, defineEntity } from '@fyre-db/core';
+import { FyreDb, defineEntity } from '@fyre-db/core';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir, printTree } from './common';
 
 // ─── Entity ──────────────────────────────────────────────
@@ -17,7 +17,7 @@ async function main() {
 
   // ── Session 1: create tenant and save tasks ────────────
   console.log('=== Session 1: Write ===');
-  const db1 = new Strata({
+  const db1 = new FyreDb({
     appId: 'persistent-demo',
     entities: [Task],
     localAdapter: storage,
@@ -42,7 +42,7 @@ async function main() {
   }
 
   await db1.dispose();
-  console.log('\nStrata disposed — data flushed to disk.\n');
+  console.log('\nFyreDb disposed — data flushed to disk.\n');
 
   // ── Show files on disk ─────────────────────────────────
   console.log('Files on disk:');
@@ -50,7 +50,7 @@ async function main() {
 
   // ── Session 2: reload from disk ────────────────────────
   console.log('\n=== Session 2: Read ===');
-  const db2 = new Strata({
+  const db2 = new FyreDb({
     appId: 'persistent-demo',
     entities: [Task],
     localAdapter: storage,

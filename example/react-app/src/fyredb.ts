@@ -1,4 +1,4 @@
-import { Strata, defineEntity } from '@fyre-db/core';
+import { FyreDb, defineEntity } from '@fyre-db/core';
 import { LocalStorageAdapter } from '@fyre-db/plugins';
 
 // ─── Entity Definitions ──────────────────────────────────
@@ -6,9 +6,9 @@ import { LocalStorageAdapter } from '@fyre-db/plugins';
 export type Task = { title: string; done: boolean };
 export const taskDef = defineEntity<Task>('task');
 
-// ─── Strata Instance ─────────────────────────────────────
+// ─── FyreDb Instance ─────────────────────────────────────
 
-export const strata = new Strata({
+export const fyredb = new FyreDb({
   appId: 'react-example',
   entities: [taskDef],
   localAdapter: new LocalStorageAdapter('react-example'),
@@ -16,6 +16,6 @@ export const strata = new Strata({
 });
 
 // Expose for browser console debugging
-// Usage: strata.tenants.list(), tasks.query(), tasks.save({title:'test',done:false})
-(globalThis as Record<string, unknown>).strata = strata;
-(globalThis as Record<string, unknown>).tasks = strata.repo(taskDef);
+// Usage: fyredb.tenants.list(), tasks.query(), tasks.save({title:'test',done:false})
+(globalThis as Record<string, unknown>).fyredb = fyredb;
+(globalThis as Record<string, unknown>).tasks = fyredb.repo(taskDef);

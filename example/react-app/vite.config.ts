@@ -10,7 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@fyre-db/core': path.resolve(__dirname, '../../src/index.ts'),
-      '@strata': path.resolve(__dirname, '../../src'),
+      '@fyredb': path.resolve(__dirname, '../../src'),
     },
   },
 });

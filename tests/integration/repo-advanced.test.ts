@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import {
-  Strata,
+  FyreDb,
   defineEntity,
   MemoryStorageAdapter,
 } from '@/index';
@@ -19,17 +19,17 @@ const DerivedDef = defineEntity<DerivedItem>('derived', {
 });
 
 describe('Repository advanced integration', () => {
-  let strata: Strata;
+  let fyredb: FyreDb;
 
   afterEach(async () => {
-    if (strata) {
-      await strata.dispose().catch(() => {});
+    if (fyredb) {
+      await fyredb.dispose().catch(() => {});
     }
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function setup(entities: any[] = [TaskDef]) {
-    strata = new Strata({
+    fyredb = new FyreDb({
       appId: 'test',
       entities,
       localAdapter: new MemoryStorageAdapter(),
@@ -39,7 +39,7 @@ describe('Repository advanced integration', () => {
 
   it('deriveId upsert — second save with same derived key updates existing entity', () => {
     setup([DerivedDef]);
-    const repo = strata.repo(DerivedDef) as Repository<DerivedItem>;
+    const repo = fyredb.repo(DerivedDef) as Repository<DerivedItem>;
 
     const id1 = repo.save({ slug: 'my-item', value: 10 });
     const id2 = repo.save({ slug: 'my-item', value: 20 });
@@ -53,7 +53,7 @@ describe('Repository advanced integration', () => {
 
   it('range queries — filters entities by numeric field range', () => {
     setup();
-    const repo = strata.repo(TaskDef) as Repository<Task>;
+    const repo = fyredb.repo(TaskDef) as Repository<Task>;
 
     repo.save({ title: 'Low', done: false, priority: 1 });
     repo.save({ title: 'Mid-Low', done: false, priority: 2 });
@@ -72,7 +72,7 @@ describe('Repository advanced integration', () => {
 
   it('query edge cases — offset > count returns empty, limit=0 returns empty', () => {
     setup();
-    const repo = strata.repo(TaskDef) as Repository<Task>;
+    const repo = fyredb.repo(TaskDef) as Repository<Task>;
 
     repo.save({ title: 'A', done: false, priority: 1 });
     repo.save({ title: 'B', done: false, priority: 2 });
@@ -86,7 +86,7 @@ describe('Repository advanced integration', () => {
 
   it('SingletonRepository full lifecycle — get → save → get → observe → delete → get → observe', async () => {
     setup([SettingsDef]);
-    const repo = strata.repo(SettingsDef) as SingletonRepository<Settings>;
+    const repo = fyredb.repo(SettingsDef) as SingletonRepository<Settings>;
 
     // Initially undefined
     expect(repo.get()).toBeUndefined();
@@ -113,7 +113,7 @@ describe('Repository advanced integration', () => {
 
   it('multiple simultaneous observers — all receive updates, unsubscribing one keeps others', () => {
     setup();
-    const repo = strata.repo(TaskDef) as Repository<Task>;
+    const repo = fyredb.repo(TaskDef) as Repository<Task>;
 
     const id = repo.save({ title: 'Watched', done: false, priority: 1 });
 
@@ -153,7 +153,7 @@ describe('Repository advanced integration', () => {
 
   it('event bus listener cleanup — unsubscribed observer does not fire on save', () => {
     setup();
-    const repo = strata.repo(TaskDef) as Repository<Task>;
+    const repo = fyredb.repo(TaskDef) as Repository<Task>;
 
     let callCount = 0;
     const sub = repo.observeQuery().subscribe(() => { callCount++; });

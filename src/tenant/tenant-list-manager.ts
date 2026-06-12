@@ -1,14 +1,14 @@
 import { BehaviorSubject, type Observable } from 'rxjs';
 import type { DataAdapter } from '@/persistence';
 import type { PartitionBlob } from '@/persistence';
-import type { ResolvedStrataOptions } from '../options';
+import type { ResolvedFyreDbOptions } from '../options';
 import type { Tenant } from './types';
 import { log } from '@/log';
 
 export class TenantListManager {
   private readonly local: DataAdapter;
   private readonly cloud: DataAdapter | undefined;
-  private readonly options: ResolvedStrataOptions;
+  private readonly options: ResolvedFyreDbOptions;
   private readonly subject = new BehaviorSubject<readonly Tenant[]>([]);
   private initPromise: Promise<void> | null = null;
 
@@ -21,7 +21,7 @@ export class TenantListManager {
   constructor(
     localAdapter: DataAdapter,
     cloudAdapter: DataAdapter | undefined,
-    options: ResolvedStrataOptions,
+    options: ResolvedFyreDbOptions,
   ) {
     this.local = localAdapter;
     this.cloud = cloudAdapter;

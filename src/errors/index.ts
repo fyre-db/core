@@ -1,2 +1,2 @@
-export { StrataError } from './strata-error';
-export { StrataConfigError } from './config-error';
+export { FyreDbError } from './fyredb-error';
+export { FyreDbConfigError } from './config-error';

@@ -1,4 +1,4 @@
-import { StrataError } from '@/errors';
+import { FyreDbError } from '@/errors';
 
 export type TenantErrorKind =
   | 'tenant-not-found'
@@ -9,7 +9,7 @@ export type TenantErrorKind =
   | 'no-tenant-loaded'
   | 'not-encrypted';
 
-export class TenantError extends StrataError {
+export class TenantError extends FyreDbError {
   constructor(message: string, options: {
     readonly kind: TenantErrorKind;
     readonly cause?: Error;

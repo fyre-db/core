@@ -17,7 +17,7 @@ Append-only log of decisions made during sprints that are not explicitly covered
 **Agent:** vp
 **Component:** schema, persistence, store
 **Decision:** Migration redesign uses blob-level `__v` and `BlobMigration` type instead of per-entity `__v` and `migrateEntity`.
-**Rationale:** E32 spec requires moving `__v` to blob level and decoupling migrations from `defineEntity`. The `PartitionBlob` type gains an optional `__v` field. Migrations are `ReadonlyArray<BlobMigration>` on `StrataConfig`, each with a `version` and `migrate(blob) → blob` function. The `migrateBlob()` function applies migrations sequentially above the stored version. Entity-level `version`/`migrations` removed from `EntityDefinition`, `EntityDefinitionOptions`, and `defineEntity`.
+**Rationale:** E32 spec requires moving `__v` to blob level and decoupling migrations from `defineEntity`. The `PartitionBlob` type gains an optional `__v` field. Migrations are `ReadonlyArray<BlobMigration>` on `FyreDbConfig`, each with a `version` and `migrate(blob) → blob` function. The `migrateBlob()` function applies migrations sequentially above the stored version. Entity-level `version`/`migrations` removed from `EntityDefinition`, `EntityDefinitionOptions`, and `defineEntity`.
 **Status:** accepted
 
 ## D002 — sprint-migration-sync-cleanup — 2026-03-27T14:10:00Z

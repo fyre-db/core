@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
-  Strata,
+  FyreDb,
   defineEntity,
   MemoryStorageAdapter,
   partitioned,
@@ -17,7 +17,7 @@ const TransactionDef = defineEntity<Transaction>('transaction', {
 });
 
 describe('Persistence advanced integration', () => {
-  const instances: Strata[] = [];
+  const instances: FyreDb[] = [];
 
   afterEach(async () => {
     for (const s of instances) {
@@ -26,7 +26,7 @@ describe('Persistence advanced integration', () => {
     instances.length = 0;
   });
 
-  function track(s: Strata): Strata {
+  function track(s: FyreDb): FyreDb {
     instances.push(s);
     return s;
   }
@@ -54,18 +54,18 @@ describe('Persistence advanced integration', () => {
     };
 
     // Phase 1: Save through transformed adapter
-    const strata1 = track(new Strata({
+    const fyredb1 = track(new FyreDb({
       appId: 'test',
       entities: [ItemDef],
       localAdapter: transformedAdapter,
       deviceId: 'dev-1',
     }));
-    const tenant = await strata1.tenants.create({ name: 'W', meta: { b: 1 } });
-    await strata1.tenants.open(tenant.id);
+    const tenant = await fyredb1.tenants.create({ name: 'W', meta: { b: 1 } });
+    await fyredb1.tenants.open(tenant.id);
 
-    const repo1 = strata1.repo(ItemDef) as Repository<Item>;
+    const repo1 = fyredb1.repo(ItemDef) as Repository<Item>;
     const id = repo1.save({ name: 'Secret', category: 'classified' });
-    await strata1.dispose();
+    await fyredb1.dispose();
 
     // Read raw bytes — should be XOR'd (not valid JSON)
     const rawBytes = await rawAdapter.read(tenant, 'item._');
@@ -73,15 +73,15 @@ describe('Persistence advanced integration', () => {
     expect(() => JSON.parse(new TextDecoder().decode(rawBytes!))).toThrow();
 
     // Phase 2: Reload through transformed adapter → data should be readable
-    const strata2 = track(new Strata({
+    const fyredb2 = track(new FyreDb({
       appId: 'test',
       entities: [ItemDef],
       localAdapter: transformedAdapter,
       deviceId: 'dev-1',
     }));
-    await strata2.tenants.open(tenant.id);
+    await fyredb2.tenants.open(tenant.id);
 
-    const repo2 = strata2.repo(ItemDef) as Repository<Item>;
+    const repo2 = fyredb2.repo(ItemDef) as Repository<Item>;
     const loaded = repo2.get(id);
     expect(loaded).toBeDefined();
     expect(loaded!.name).toBe('Secret');
@@ -91,21 +91,21 @@ describe('Persistence advanced integration', () => {
   it('adapter list() discovers partition keys after flush', async () => {
     const localAdapter = new MemoryStorageAdapter();
 
-    const strata = track(new Strata({
+    const fyredb = track(new FyreDb({
       appId: 'test',
       entities: [TransactionDef],
       localAdapter,
       deviceId: 'dev-1',
     }));
-    const tenant = await strata.tenants.create({ name: 'W', meta: { b: 1 } });
-    await strata.tenants.open(tenant.id);
+    const tenant = await fyredb.tenants.create({ name: 'W', meta: { b: 1 } });
+    await fyredb.tenants.open(tenant.id);
 
-    const repo = strata.repo(TransactionDef) as Repository<Transaction>;
+    const repo = fyredb.repo(TransactionDef) as Repository<Transaction>;
     repo.save({ amount: 100, date: new Date(), accountId: 'checking' });
     repo.save({ amount: 200, date: new Date(), accountId: 'savings' });
     repo.save({ amount: 50, date: new Date(), accountId: 'checking' });
 
-    await strata.dispose();
+    await fyredb.dispose();
 
     // Verify partitioned blobs were flushed
     const checking = await localAdapter.read(tenant, 'transaction.checking');

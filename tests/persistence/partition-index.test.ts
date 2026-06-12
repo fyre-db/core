@@ -40,13 +40,13 @@ describe('Partition Index', () => {
     expect(loaded).toEqual(indexes);
   });
 
-  it('stores indexes inside __strata blob', async () => {
+  it('stores indexes inside __fyredb blob', async () => {
     const adapter = createDataAdapter();
     const indexes = {
       transaction: { '2026-01': { hash: 1, count: 1, deletedCount: 0, updatedAt: 1 } },
     };
     await saveAllIndexes(adapter, undefined, indexes, DEFAULT_OPTIONS);
-    const blob = await adapter.read(undefined, '__strata');
+    const blob = await adapter.read(undefined, '__fyredb');
     expect(blob).not.toBeNull();
   });
 

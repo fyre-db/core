@@ -12,8 +12,8 @@ import type { BlobMigration } from '@/schema/migration';
 import { validateMigrations } from '@/schema/migration';
 import { EventBus } from '@/reactive';
 import type { EntityEvent } from '@/reactive';
-import { StrataError } from '@/errors';
-import { StrataConfigError } from '@/errors';
+import { FyreDbError } from '@/errors';
+import { FyreDbConfigError } from '@/errors';
 import { EncryptedDataAdapter } from '@/persistence';
 import { Store } from '@/store';
 import { Repository, SingletonRepository } from '@/repo';
@@ -32,12 +32,12 @@ import { log } from '@/log';
 
 // ─── Types ───────────────────────────────────────────────
 
-export type { StrataOptions, ResolvedStrataOptions } from './options';
+export type { FyreDbOptions, ResolvedFyreDbOptions } from './options';
 export { resolveOptions } from './options';
 import { resolveOptions } from './options';
-import type { StrataOptions } from './options';
+import type { FyreDbOptions } from './options';
 
-export type StrataConfig = {
+export type FyreDbConfig = {
   readonly appId: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly entities: ReadonlyArray<EntityDefinition<any>>;
@@ -46,7 +46,7 @@ export type StrataConfig = {
   readonly deviceId: string;
   readonly migrations?: ReadonlyArray<BlobMigration>;
   readonly encryptionService?: EncryptionService;
-  readonly options?: StrataOptions;
+  readonly options?: FyreDbOptions;
 };
 
 // ─── Validation ──────────────────────────────────────────
@@ -56,15 +56,15 @@ export function validateEntityDefinitions(
   entities: ReadonlyArray<EntityDefinition<any>>,
 ): void {
   if (entities.length === 0) {
-    throw new StrataConfigError('At least one entity definition is required');
+    throw new FyreDbConfigError('At least one entity definition is required');
   }
   const names = new Set<string>();
   for (const def of entities) {
     if (!def.name) {
-      throw new StrataConfigError('Entity definition must have a name');
+      throw new FyreDbConfigError('Entity definition must have a name');
     }
     if (names.has(def.name)) {
-      throw new StrataConfigError(`Duplicate entity name: ${def.name}`);
+      throw new FyreDbConfigError(`Duplicate entity name: ${def.name}`);
     }
     names.add(def.name);
   }
@@ -72,13 +72,13 @@ export function validateEntityDefinitions(
 
 // ─── Class ───────────────────────────────────────────────
 
-export class Strata {
+export class FyreDb {
   readonly tenants: TenantManagerType;
 
   private readonly hlcRef: { current: Hlc };
   private readonly eventBus: EventBus<EntityEvent>;
   private readonly syncEventBus: EventBus<SyncEvent>;
-  private readonly errorBus: EventBus<StrataError>;
+  private readonly errorBus: EventBus<FyreDbError>;
   private readonly syncEngine: SyncEngineType;
   private readonly dirtyTracker: ReactiveFlag;
   private readonly tenantContext: TenantContext;
@@ -90,7 +90,7 @@ export class Strata {
   private disposed = false;
   private disposePromise: Promise<void> | null = null;
 
-  constructor(config: StrataConfig) {
+  constructor(config: FyreDbConfig) {
     validateEntityDefinitions(config.entities);
     if (config.migrations) validateMigrations(config.migrations);
     const resolvedOptions = resolveOptions(config.options);
@@ -108,7 +108,7 @@ export class Strata {
     this.hlcRef = { current: createHlc(config.deviceId) };
     this.eventBus = new EventBus<EntityEvent>();
     this.syncEventBus = new EventBus<SyncEvent>();
-    this.errorBus = new EventBus<StrataError>();
+    this.errorBus = new EventBus<FyreDbError>();
     this.syncEngine = new SyncEngine(
       store, localAdapter, cloudAdapter,
       config.entities.map(d => d.name), this.hlcRef, this.eventBus, this.syncEventBus,
@@ -147,10 +147,10 @@ export class Strata {
       filter(e => e.source !== 'sync'),
     ).subscribe(() => { this.dirtyTracker.set(); });
 
-    // Re-emit sync errors that are StrataErrors onto the errorBus so consumers
+    // Re-emit sync errors that are FyreDbErrors onto the errorBus so consumers
     // get a single channel for all data-op errors regardless of source.
     this.errorSubscription = this.syncEventBus.all$.subscribe((evt: SyncEvent) => {
-      if (evt.type === 'sync-failed' && evt.error instanceof StrataError) {
+      if (evt.type === 'sync-failed' && evt.error instanceof FyreDbError) {
         this.errorBus.emit(evt.error);
       }
     });
@@ -160,9 +160,9 @@ export class Strata {
   repo<T>(def: EntityDefinition<T, 'global' | 'partitioned'>): RepositoryType<T>;
   repo<T>(def: EntityDefinition<T>): RepositoryType<T> | SingletonRepositoryType<T>;
   repo<T>(def: EntityDefinition<T>): RepositoryType<T> | SingletonRepositoryType<T> {
-    assertNotDisposed(this.disposed, 'Strata instance');
+    assertNotDisposed(this.disposed, 'FyreDb instance');
     const r = this.repoMap.get(def.name);
-    if (!r) throw new StrataConfigError(`Unknown entity definition: ${def.name}`);
+    if (!r) throw new FyreDbConfigError(`Unknown entity definition: ${def.name}`);
     return r as RepositoryType<T> | SingletonRepositoryType<T>;
   }
 
@@ -172,9 +172,9 @@ export class Strata {
   observe(channel: 'sync'): Observable<SyncEvent>;
   observe(channel: 'dirty'): Observable<boolean>;
   observe(channel: 'tenant'): Observable<Tenant | undefined>;
-  observe(channel: 'error'): Observable<StrataError>;
+  observe(channel: 'error'): Observable<FyreDbError>;
   observe(channel: 'entity' | 'sync' | 'dirty' | 'tenant' | 'error', entityName?: string): Observable<unknown> {
-    assertNotDisposed(this.disposed, 'Strata instance');
+    assertNotDisposed(this.disposed, 'FyreDb instance');
     switch (channel) {
       case 'entity':
         return entityName
@@ -203,7 +203,7 @@ export class Strata {
       this.syncEventBus.dispose();
       this.errorBus.dispose();
       await this.syncEngine.dispose();
-      log.strata('disposed');
+      log.fyredb('disposed');
     })();
     return this.disposePromise;
   }

@@ -60,25 +60,25 @@ async function main() {
   const textEncoder = new TextEncoder();
   const SALT_LENGTH = 16;
 
-  // 2. Find all subdirectories containing a __strata marker
+  // 2. Find all subdirectories containing a __fyredb marker
   const rootEntries = await readdir(rootDir, { withFileTypes: true });
   const tenantDirs: { name: string; dir: string }[] = [];
 
   for (const entry of rootEntries) {
     if (!entry.isDirectory()) continue;
-    const markerPath = path.join(rootDir, entry.name, '__strata');
+    const markerPath = path.join(rootDir, entry.name, '__fyredb');
     try {
       const s = await stat(markerPath);
       if (s.isFile()) {
         tenantDirs.push({ name: entry.name, dir: path.join(rootDir, entry.name) });
       }
     } catch {
-      // no __strata, skip
+      // no __fyredb, skip
     }
   }
 
   if (tenantDirs.length === 0) {
-    console.log('No tenant directories with __strata found.');
+    console.log('No tenant directories with __fyredb found.');
     return;
   }
 
@@ -89,7 +89,7 @@ async function main() {
     console.log(`── Tenant: ${tenantId} ──`);
 
     // 3a. aesGcmDecrypt marker blob with KEK to get DEK
-    const markerPath = path.join(tenantDir, '__strata');
+    const markerPath = path.join(tenantDir, '__fyredb');
     let dek: CryptoKey;
     try {
       const markerBytes = new Uint8Array(await readFile(markerPath));
@@ -113,7 +113,7 @@ async function main() {
       const ciphertext = markerBytes.slice(SALT_LENGTH);
       const decryptedMarker = await aesGcmDecrypt(ciphertext, kek);
       await writeFile(markerPath, decryptedMarker);
-      console.log('  ✓ __strata decrypted');
+      console.log('  ✓ __fyredb decrypted');
 
       const markerJson = JSON.parse(new TextDecoder().decode(decryptedMarker)) as Record<string, unknown>;
       const system = markerJson['__system'] as Record<string, unknown>;
@@ -135,7 +135,7 @@ async function main() {
     // 3b. aesGcmDecrypt all other files with DEK
     const entries = await readdir(tenantDir);
     for (const entry of entries) {
-      if (entry === '__strata') continue; // already decrypted
+      if (entry === '__fyredb') continue; // already decrypted
 
       const filePath = path.join(tenantDir, entry);
       const fileStat = await stat(filePath);

@@ -85,10 +85,10 @@ class FsStorageAdapter implements StorageAdapter {
 ## Usage
 
 ```typescript
-const strata = new Strata({
+const fyredb = new FyreDb({
   appId: 'my-app',
   entities: [taskDef],
-  localAdapter: new FsStorageAdapter('/data/strata'),
+  localAdapter: new FsStorageAdapter('/data/fyredb'),
   deviceId: 'device-1',
 });
 ```
@@ -110,7 +110,7 @@ Keys the framework reads and writes:
 | Key | Scope | Contents |
 |---|---|---|
 | `__tenants` | `tenant: undefined` | Tenant list blob |
-| `__strata` | `tenant: Tenant` | Marker blob (indexes, metadata, encrypted DEK) |
+| `__fyredb` | `tenant: Tenant` | Marker blob (indexes, metadata, encrypted DEK) |
 | `task._` | `tenant: Tenant` | Partition blob: entity `task`, partition `_` (global) |
 | `transaction.2026-03` | `tenant: Tenant` | Partition blob: entity `transaction`, partition `2026-03` |
 

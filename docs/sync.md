@@ -9,7 +9,7 @@ fyre-db syncs data between three layers: **memory** (in-app), **local** (on-devi
 Pass a `cloudAdapter` to enable sync:
 
 ```typescript
-const strata = new Strata({
+const fyredb = new FyreDb({
   appId: 'my-app',
   entities: [taskDef],
   localAdapter: myLocalStorage,
@@ -24,7 +24,7 @@ Without a `cloudAdapter`, data is persisted locally only.
 
 ### 1. Hydrate (on tenant open)
 
-When you call `strata.tenants.open(id)`, the framework:
+When you call `fyredb.tenants.open(id)`, the framework:
 1. Syncs cloud → local (if cloud adapter configured)
 2. Syncs local → memory (loads entities into Map)
 3. If cloud is unreachable, loads from local only and emits a `sync-failed` event
@@ -39,7 +39,7 @@ When you call `strata.tenants.open(id)`, the framework:
 After cloud sync, local → memory is run to merge any remote changes back into the app.
 
 ```typescript
-const strata = new Strata({
+const fyredb = new FyreDb({
   // ...
   options: {
     localFlushIntervalMs: 2000,    // default: 2s
@@ -51,7 +51,7 @@ const strata = new Strata({
 ### 3. Manual
 
 ```typescript
-const result = await strata.tenants.sync();
+const result = await fyredb.tenants.sync();
 // result: { entitiesUpdated, conflictsResolved, partitionsSynced }
 ```
 
@@ -80,7 +80,7 @@ When one device updates an entity and another deletes it, the HLC decides:
 ## Sync Events
 
 ```typescript
-strata.observe('sync').subscribe((event) => {
+fyredb.observe('sync').subscribe((event) => {
   switch (event.type) {
     case 'sync-started':
       console.log(`Syncing ${event.source} → ${event.target}`);
@@ -101,12 +101,12 @@ Track whether data has unsaved changes:
 
 ```typescript
 // Sync check
-if (strata.isDirty) {
+if (fyredb.isDirty) {
   showUnsavedIndicator();
 }
 
 // Reactive observable
-strata.observe('dirty').subscribe((dirty) => {
+fyredb.observe('dirty').subscribe((dirty) => {
   setUnsavedBadge(dirty);
 });
 ```

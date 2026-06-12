@@ -1,4 +1,4 @@
-# Strata Sprint Newsletter
+# FyreDb Sprint Newsletter
 
 Append-only log of sprint outcomes. Most recent entry at the bottom.
 
@@ -72,7 +72,7 @@ Append-only log of sprint outcomes. Most recent entry at the bottom.
 ### What's New
 - **Debounced flush** (`src/store/`): `flushPartition()` serializes dirty partition data (entities + tombstone placeholders) to blob format and writes via adapter; `flushAll()` iterates all dirty keys and clears dirty flags after successful write; `createFlushScheduler()` with configurable idle debounce (`schedule`/`flush`/`dispose` lifecycle)
 - **Repository\<T\> CRUD & query** (`src/repo/`): `createRepository<T>()` factory bound to entity definition; full CRUD — `get(id)`, `save(entity)`, `saveMany(entities)`, `delete(id)`, `deleteMany(ids)` with HLC stamping, ID generation, and event emission; query pipeline — `where` (shallow partial match), `range` (gt/gte/lt/lte), `orderBy` (multi-field asc/desc), `offset`/`limit` pagination
-- **TenantManager** (`src/tenant/`): `createTenantManager()` with full tenant lifecycle — `create` (generates ID, writes `__strata` marker blob), `load` (sets active tenant on `activeTenant$`), `setup` (detects existing workspace via marker blob, derives deterministic ID), `delink` (local-only removal), `delete` (removes local + cloud data), `list` (cached `__tenants` blob persistence)
+- **TenantManager** (`src/tenant/`): `createTenantManager()` with full tenant lifecycle — `create` (generates ID, writes `__fyredb` marker blob), `load` (sets active tenant on `activeTenant$`), `setup` (detects existing workspace via marker blob, derives deterministic ID), `delink` (local-only removal), `delete` (removes local + cloud data), `list` (cached `__tenants` blob persistence)
 
 ### Design Decisions
 - **Subscribable\<T\>** used instead of rxjs `Observable` for `activeTenant$` — keeps the framework dependency-light
@@ -291,12 +291,12 @@ Append-only log of sprint outcomes. Most recent entry at the bottom.
 ## Sprint 8 — Framework Entry Point & Graceful Shutdown (Final Sprint) — 2026-03-24T00:00:00Z
 
 ### What's New
-- **createStrata() entry point** (`src/`): `createStrata(config)` wires all framework modules — HLC, event bus, in-memory store, flush scheduler, repositories, sync infrastructure, and tenant manager; `StrataConfig` and `Strata` types define the public API surface; `validateEntityDefinitions()` rejects duplicates and empty lists
-- **Repository accessor** (`src/`): `strata.repo(def)` retrieves `Repository<T>` or `SingletonRepository<T>` by entity definition reference; repositories created per key strategy during initialization
-- **Sync wiring** (`src/`): `strata.sync()` delegates to `syncNow()` via sync lock; `strata.isDirty`/`isDirty$` expose dirty tracker state; `onSyncEvent`/`offSyncEvent` wire to typed sync event emitter
+- **createFyreDb() entry point** (`src/`): `createFyreDb(config)` wires all framework modules — HLC, event bus, in-memory store, flush scheduler, repositories, sync infrastructure, and tenant manager; `FyreDbConfig` and `FyreDb` types define the public API surface; `validateEntityDefinitions()` rejects duplicates and empty lists
+- **Repository accessor** (`src/`): `fyredb.repo(def)` retrieves `Repository<T>` or `SingletonRepository<T>` by entity definition reference; repositories created per key strategy during initialization
+- **Sync wiring** (`src/`): `fyredb.sync()` delegates to `syncNow()` via sync lock; `fyredb.isDirty`/`isDirty$` expose dirty tracker state; `onSyncEvent`/`offSyncEvent` wire to typed sync event emitter
 - **Hydrate-on-tenant-load** (`src/`): `tenants.load()` triggers Phase 1 hydrate — cloud hydration with `cloud-unreachable` fallback to local; sync scheduler starts after hydration completes
-- **Graceful dispose** (`src/`): `strata.dispose()` performs orderly shutdown — stop scheduler → drain sync lock → flush all dirty partitions → dispose all repositories → cleanup; post-dispose guards reject further operations; idempotent dispose returns same promise on subsequent calls
-- **Barrel exports** (`src/`): root `index.ts` re-exports `createStrata`, `StrataConfig`, `Strata`, `StrataOptions`, `defineEntity`, `EntityDefinition`, `BlobAdapter`, `BlobTransform`, and all public API types
+- **Graceful dispose** (`src/`): `fyredb.dispose()` performs orderly shutdown — stop scheduler → drain sync lock → flush all dirty partitions → dispose all repositories → cleanup; post-dispose guards reject further operations; idempotent dispose returns same promise on subsequent calls
+- **Barrel exports** (`src/`): root `index.ts` re-exports `createFyreDb`, `FyreDbConfig`, `FyreDb`, `FyreDbOptions`, `defineEntity`, `EntityDefinition`, `BlobAdapter`, `BlobTransform`, and all public API types
 
 ### What We Support
 - HLC creation, local/remote tick, and deterministic comparison
@@ -327,7 +327,7 @@ Append-only log of sprint outcomes. Most recent entry at the bottom.
 - Global sync lock with sequential execution and duplicate dedup
 - Sync event emitter with typed lifecycle events
 - Dirty tracking with reactive Observable for unsaved-to-cloud state
-- **createStrata() single entry point wiring all modules into a cohesive framework instance**
+- **createFyreDb() single entry point wiring all modules into a cohesive framework instance**
 - **Graceful dispose with orderly shutdown, post-dispose guards, and idempotent dispose**
 
 ### Quality
@@ -336,11 +336,11 @@ Append-only log of sprint outcomes. Most recent entry at the bottom.
 - Known issues: 0
 
 ### Coverage Improvements
-- createStrata: validates entity definitions (rejects duplicates, empty list), creates HLC/store/eventBus/flushScheduler, wires sync infrastructure (lock, events, dirty tracker, scheduler), creates tenant manager
+- createFyreDb: validates entity definitions (rejects duplicates, empty list), creates HLC/store/eventBus/flushScheduler, wires sync infrastructure (lock, events, dirty tracker, scheduler), creates tenant manager
 - Repository accessor: repo(def) returns correct Repository or SingletonRepository by key strategy, throws for unknown definition
-- Sync wiring: strata.sync() delegates through sync lock, rejects without tenant or cloud adapter, isDirty/isDirty$ expose dirty tracker
+- Sync wiring: fyredb.sync() delegates through sync lock, rejects without tenant or cloud adapter, isDirty/isDirty$ expose dirty tracker
 - Hydrate-on-tenant-load: tenants.load() triggers cloud hydration, falls back to local on cloud-unreachable, starts sync scheduler post-hydrate
 - Dispose: orderly shutdown sequence (stop scheduler → drain lock → flush → dispose repos → cleanup), post-dispose guards reject sync/repo/load, idempotent dispose returns same promise
 
 ### BACKLOG COMPLETE
-All 25 epics delivered across 8 sprints. The Strata framework is feature-complete per the design specifications.
+All 25 epics delivered across 8 sprints. The FyreDb framework is feature-complete per the design specifications.

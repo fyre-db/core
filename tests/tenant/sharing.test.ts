@@ -120,7 +120,7 @@ describe('Sharing flow', () => {
     const tm = new TenantManager(makeDeps(adapter, { rawCloudAdapter: cloudWithDerive(() => 'no-data') }));
 
     await expect(tm.join({ meta: { folder: 'empty' } })).rejects.toThrow(
-      'No strata workspace found',
+      'No fyredb workspace found',
     );
   });
 
@@ -132,7 +132,7 @@ describe('Sharing flow', () => {
 
     const tm = new TenantManager(makeDeps(adapter, { rawCloudAdapter: cloudWithDerive(() => 'bad-ver') }));
     await expect(tm.join({ meta: {} })).rejects.toThrow(
-      'Incompatible strata workspace version',
+      'Incompatible fyredb workspace version',
     );
   });
 

@@ -7,7 +7,7 @@ When your entity schema changes (add a field, rename a field, restructure data),
 ## Defining Migrations
 
 ```typescript
-import { Strata, defineEntity } from '@fyre-db/core';
+import { FyreDb, defineEntity } from '@fyre-db/core';
 import type { BlobMigration } from '@fyre-db/core';
 
 type Task = { title: string; done: boolean; priority: string };
@@ -29,7 +29,7 @@ const migrations: BlobMigration[] = [
   },
 ];
 
-const strata = new Strata({
+const fyredb = new FyreDb({
   appId: 'my-app',
   entities: [taskDef],
   localAdapter: storage,

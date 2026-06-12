@@ -1,7 +1,7 @@
 import type { Tenant } from '@/adapter';
 import type { AllIndexes, DataAdapter } from '@/persistence';
 import { loadAllIndexes } from '@/persistence';
-import type { ResolvedStrataOptions } from '../options';
+import type { ResolvedFyreDbOptions } from '../options';
 import { log } from '@/log';
 
 /**
@@ -33,7 +33,7 @@ export class MarkerStore {
   private readonly inflight = new Map<string, Promise<AllIndexes>>();
   private readonly epoch = new Map<string, number>();
 
-  constructor(private readonly options: ResolvedStrataOptions) {}
+  constructor(private readonly options: ResolvedFyreDbOptions) {}
 
   /**
    * Return the cached indexes for a tier, loading them through the adapter on

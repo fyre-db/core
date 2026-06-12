@@ -1,6 +1,6 @@
 import type { PartitionBlob } from '@/persistence';
 import type { EntityDefinition } from './types';
-import { StrataConfigError } from '@/errors';
+import { FyreDbConfigError } from '@/errors';
 
 export type BlobMigration = {
   readonly version: number;
@@ -25,9 +25,9 @@ export function validateMigrations(
     const actual = sorted[i].version;
     if (actual !== expected) {
       if (i > 0 && sorted[i - 1].version === actual) {
-        throw new StrataConfigError(`Duplicate migration version: ${actual}`);
+        throw new FyreDbConfigError(`Duplicate migration version: ${actual}`);
       }
-      throw new StrataConfigError(
+      throw new FyreDbConfigError(
         `Migration versions must be contiguous starting at 1. Expected version ${expected}, got ${actual}`,
       );
     }

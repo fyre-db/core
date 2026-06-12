@@ -1,4 +1,4 @@
-import { StrataConfigError } from '@/errors';
+import { FyreDbConfigError } from '@/errors';
 
 /**
  * Convert a Uint8Array to an ArrayBuffer, handling byte offset correctly.
@@ -19,7 +19,7 @@ export function fromBase64(base64: string): Uint8Array {
   try {
     return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
   } catch {
-    throw new StrataConfigError('Invalid base64 input');
+    throw new FyreDbConfigError('Invalid base64 input');
   }
 }
 

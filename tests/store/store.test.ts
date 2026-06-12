@@ -201,11 +201,11 @@ describe('EntityStore', () => {
       expect(store.getPartition('nodot').size).toBe(0);
     });
 
-    it('write stores marker blob with __strata key', async () => {
+    it('write stores marker blob with __fyredb key', async () => {
       const store = new Store(DEFAULT_OPTIONS);
       const markerBlob = { __system: { marker: { version: 1 } }, deleted: {} };
-      await store.write(undefined, '__strata', markerBlob);
-      const read = await store.read(undefined, '__strata');
+      await store.write(undefined, '__fyredb', markerBlob);
+      const read = await store.read(undefined, '__fyredb');
       expect(read).toBeDefined();
     });
 

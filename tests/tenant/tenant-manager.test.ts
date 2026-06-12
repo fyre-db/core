@@ -188,7 +188,7 @@ describe('TenantManager', () => {
       expect(tenant.id).toBe('abcd');
     });
 
-    it('writes __strata marker blob', async () => {
+    it('writes __fyredb marker blob', async () => {
       const adapter = createDataAdapter();
       const tm = new TenantManager(makeDeps(adapter));
       const created = await tm.create({ name: 'T', meta: { folder: 'f1' } });
@@ -255,7 +255,7 @@ describe('TenantManager', () => {
       const adapter = createDataAdapter();
       const tm = new TenantManager(makeDeps(adapter));
       await expect(tm.join({ meta: { folder: 'empty' } })).rejects.toThrow(
-        'No strata workspace found',
+        'No fyredb workspace found',
       );
     });
 
@@ -293,7 +293,7 @@ describe('TenantManager', () => {
       await adapter.write(tempTenant, DEFAULT_OPTIONS.markerKey, { __system: { marker }, deleted: {} });
 
       const tm = new TenantManager(makeDeps(adapter, { rawCloudAdapter: cloudWithDerive(() => 'bad-ver') }));
-      await expect(tm.join({ meta: {} })).rejects.toThrow('Incompatible strata workspace version');
+      await expect(tm.join({ meta: {} })).rejects.toThrow('Incompatible fyredb workspace version');
     });
 
     it('detects encrypted workspace via parse failure during join', async () => {

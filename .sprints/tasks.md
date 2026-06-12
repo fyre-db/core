@@ -11,7 +11,7 @@ Epics: E32 (Migration Redesign), E33 (Sync Cleanup & Redesign)
 |---|------|------|----------|--------|--------|---------|----------|
 | 1 | Add `__v?: number` to `PartitionBlob` type | E32 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:05:00Z |
 | 2 | Create `BlobMigration` type and `migrateBlob()` function, replace entity-level `migrateEntity` | E32 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:05:00Z |
-| 3 | Add `migrations?: ReadonlyArray<BlobMigration>` to `StrataConfig` and wire through Strata class | E32 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:05:00Z |
+| 3 | Add `migrations?: ReadonlyArray<BlobMigration>` to `FyreDbConfig` and wire through FyreDb class | E32 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:05:00Z |
 | 4 | Remove entity-level `version`/`migrations` from `EntityDefinitionOptions`, `EntityDefinition`, and `defineEntity` | E32 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:05:00Z |
 | 5 | Update `loadPartitionFromAdapter` to use blob-level migration instead of entity-level | E32 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:05:00Z |
 | 6 | Update barrel exports in `schema/index.ts` | E32 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:05:00Z |
@@ -22,9 +22,9 @@ Epics: E32 (Migration Redesign), E33 (Sync Cleanup & Redesign)
 |---|------|------|----------|--------|--------|---------|----------|
 | 7 | Fix recursive `loadTenant` bug: change `this.loadTenant(tenantId)` → `this.tenants.load(tenantId)` | E33 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:10:00Z |
 | 8 | DM-13: Pass `DirtyTracker` to `SyncScheduler`, clear dirty only after successful cloud sync | E33 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:10:00Z |
-| 9 | DM-14: Update `syncNow` to return `SyncResult`, use real values in `Strata.sync()` | E33 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:10:00Z |
+| 9 | DM-14: Update `syncNow` to return `SyncResult`, use real values in `FyreDb.sync()` | E33 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:10:00Z |
 | 10 | Emit sync events from scheduler cloud sync cycle (pass `SyncEventEmitter` to scheduler) | E33 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:10:00Z |
-| 11 | Deduplicate: inline `hydrateFromCloud`, use `syncBetween` directly in `Strata.loadTenant` | E33 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:10:00Z |
+| 11 | Deduplicate: inline `hydrateFromCloud`, use `syncBetween` directly in `FyreDb.loadTenant` | E33 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:10:00Z |
 | 12 | Rename `syncMemoryToLocal` → `flushToLocal`, remove `hydrateFromCloud` export | E33 | developer | done | plan | 2026-03-27T14:00:00Z | 2026-03-27T14:10:00Z |
 
 ### Phase 3 — Review
@@ -39,7 +39,7 @@ Epics: E32 (Migration Redesign), E33 (Sync Cleanup & Redesign)
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|----------|
 | 15 | Update migration tests for blob-level approach | E32 | unit-tester | done | test | 2026-03-27T14:00:00Z | 2026-03-27T14:35:00Z |
-| 16 | Update sync scheduler and strata tests for DM-13, DM-14 changes | E33 | unit-tester | done | test | 2026-03-27T14:00:00Z | 2026-03-27T14:35:00Z |
+| 16 | Update sync scheduler and fyredb tests for DM-13, DM-14 changes | E33 | unit-tester | done | test | 2026-03-27T14:00:00Z | 2026-03-27T14:35:00Z |
 
 ### Phase 5 — Integration Tests
 
@@ -73,7 +73,7 @@ Epics: E36 (Test Cleanup), E35 (Documentation Gaps)
 | 5 | DM-17: Update `docs/tenant.md` tenant list merge to say `updatedAt` comparison | E35 | developer | done | plan | 2026-03-27T09:00:00Z | 2026-03-27T09:15:00Z |
 | 6 | MD-5,6,7: Add encryption method docs to `docs/lifecycle.md` | E35 | developer | done | plan | 2026-03-27T09:00:00Z | 2026-03-27T09:15:00Z |
 | 7 | MD-13: Add `__tenant_prefs` section to `docs/tenant.md` | E35 | developer | done | plan | 2026-03-27T09:00:00Z | 2026-03-27T09:15:00Z |
-| 8 | MD-16: Document `createStrataAsync` in `docs/lifecycle.md` | E35 | developer | done | plan | 2026-03-27T09:00:00Z | 2026-03-27T09:15:00Z |
+| 8 | MD-16: Document `createFyreDbAsync` in `docs/lifecycle.md` | E35 | developer | done | plan | 2026-03-27T09:00:00Z | 2026-03-27T09:15:00Z |
 | 9 | Strike through DM-17, MD-5, MD-6, MD-7, MD-13, MD-16 in `docs/doc-vs-implementation.md` | E35 | developer | done | plan | 2026-03-27T09:00:00Z | 2026-03-27T09:15:00Z |
 
 ### Phase 3 — Review & Verification
@@ -105,7 +105,7 @@ Dependency order: E28 → E29 → E30, E29 → E31. Phase 1 (E28) must complete 
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|----------|
 | 1 | Define `StorageAdapter` interface in `src/adapter/types.ts` — `read(tenant, key): Promise<Uint8Array \| null>`, `write(tenant, key, data: Uint8Array): Promise<void>`, `delete(tenant, key): Promise<void>`, `list(tenant, prefix): Promise<string[]>` with `tenant: Tenant \| undefined` param | E28 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:15:00Z |
-| 2 | Add `appId: string` required field to `StrataConfig` — used to namespace blob keys in `AdapterBridge` and in KEK derivation for encryption | E28 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:15:00Z |
+| 2 | Add `appId: string` required field to `FyreDbConfig` — used to namespace blob keys in `AdapterBridge` and in KEK derivation for encryption | E28 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:15:00Z |
 | 3 | Implement core `AdapterBridge` class in `src/adapter/bridge.ts` — wraps `StorageAdapter` to implement `BlobAdapter` interface, JSON-serializes `PartitionBlob` to `Uint8Array` on write, deserializes on read | E28 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:15:00Z |
 | 4 | Add `appId`-based key namespacing in `AdapterBridge` — prefix all blob keys with `{appId}/` before delegating to underlying `StorageAdapter` | E28 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:15:00Z |
 | 5 | Wire optional `encrypt`/`decrypt` hooks in `AdapterBridge` — accept optional `(data: Uint8Array) => Promise<Uint8Array>` callbacks, apply encrypt after serialize on write and decrypt before deserialize on read | E28 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:15:00Z |
@@ -123,21 +123,21 @@ Dependency order: E28 → E29 → E30, E29 → E31. Phase 1 (E28) must complete 
 | 12 | Implement AES-256-GCM encrypt in `src/adapter/crypto/cipher.ts` — `encrypt(data, dek)` generates random 12-byte IV, encrypts via `crypto.subtle.encrypt`, prepends header (version byte + IV) to ciphertext | E29 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:18:00Z |
 | 13 | Implement AES-256-GCM decrypt in `src/adapter/crypto/cipher.ts` — `decrypt(data, dek)` parses header to extract version and IV, decrypts ciphertext via `crypto.subtle.decrypt` | E29 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:18:00Z |
 | 14 | Define `InvalidEncryptionKeyError` in `src/adapter/crypto/errors.ts` — custom error class thrown when DEK unwrap fails due to wrong password | E29 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:18:00Z |
-| 15 | Create barrel exports — `src/adapter/crypto/index.ts` re-exports all crypto primitives and types, update `src/adapter/index.ts` to re-export `@strata/adapter/crypto` | E29 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:18:00Z |
+| 15 | Create barrel exports — `src/adapter/crypto/index.ts` re-exports all crypto primitives and types, update `src/adapter/index.ts` to re-export `@/adapter/crypto` | E29 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:18:00Z |
 
-### Phase 3 — Encryption Integration in createStrata (E30)
+### Phase 3 — Encryption Integration in createFyreDb (E30)
 
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|----------|
-| 16 | Define `EncryptionOptions` type and add optional `encryption: { password: string }` field to `StrataConfig` | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
-| 17 | Implement salt generation and storage — generate random 16-byte salt on first encrypted init, store as raw `Uint8Array` in `__strata_salt` blob via `StorageAdapter`, load on subsequent inits | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
-| 18 | Implement DEK bootstrap on first encrypted init — generate DEK, derive KEK from password+salt+appId, wrap DEK, store wrapped DEK in `__strata_dek` blob via `StorageAdapter` | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
+| 16 | Define `EncryptionOptions` type and add optional `encryption: { password: string }` field to `FyreDbConfig` | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
+| 17 | Implement salt generation and storage — generate random 16-byte salt on first encrypted init, store as raw `Uint8Array` in `__fyredb_salt` blob via `StorageAdapter`, load on subsequent inits | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
+| 18 | Implement DEK bootstrap on first encrypted init — generate DEK, derive KEK from password+salt+appId, wrap DEK, store wrapped DEK in `__fyredb_dek` blob via `StorageAdapter` | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
 | 19 | Implement DEK load on subsequent encrypted init — load salt and wrapped DEK blobs from `StorageAdapter`, derive KEK from password+salt+appId, unwrap DEK; throw `InvalidEncryptionKeyError` if unwrap fails | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
 | 20 | Create `encrypt`/`decrypt` callback factory — function that closes over initialized DEK and returns `(data: Uint8Array) => Promise<Uint8Array>` pair suitable as `AdapterBridge` crypto hooks | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
-| 21 | Wire encryption into `createStrata()` — when `encryption` config present: run DEK bootstrap/load, create crypto callbacks, construct `AdapterBridge` with crypto hooks wrapping user-provided `StorageAdapter` | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
-| 22 | Implement `changePassword(oldPassword, newPassword)` on Strata instance — derive old KEK, unwrap DEK, derive new KEK with same salt, re-wrap DEK, overwrite `__strata_dek` blob | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
-| 23 | Implement `enableEncryption(password)` on Strata instance — generate DEK+salt, derive KEK, wrap DEK, store salt+DEK blobs, re-encrypt all existing data blobs via `StorageAdapter` list+read+encrypt+write | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
-| 24 | Implement `disableEncryption(password)` on Strata instance — derive KEK, unwrap DEK, decrypt all existing data blobs, remove `__strata_salt` and `__strata_dek` blobs | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
+| 21 | Wire encryption into `createFyreDb()` — when `encryption` config present: run DEK bootstrap/load, create crypto callbacks, construct `AdapterBridge` with crypto hooks wrapping user-provided `StorageAdapter` | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
+| 22 | Implement `changePassword(oldPassword, newPassword)` on FyreDb instance — derive old KEK, unwrap DEK, derive new KEK with same salt, re-wrap DEK, overwrite `__fyredb_dek` blob | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
+| 23 | Implement `enableEncryption(password)` on FyreDb instance — generate DEK+salt, derive KEK, wrap DEK, store salt+DEK blobs, re-encrypt all existing data blobs via `StorageAdapter` list+read+encrypt+write | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
+| 24 | Implement `disableEncryption(password)` on FyreDb instance — derive KEK, unwrap DEK, decrypt all existing data blobs, remove `__fyredb_salt` and `__fyredb_dek` blobs | E30 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:22:00Z |
 
 ### Phase 4 — Schema Migration (E31)
 
@@ -148,7 +148,7 @@ Dependency order: E28 → E29 → E30, E29 → E31. Phase 1 (E28) must complete 
 | 27 | Implement on-load version check — during entity deserialization, compare stored `__v` against current `EntityDefinition.version`, flag entities needing migration | E31 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:25:00Z |
 | 28 | Implement migration runner — apply migration functions sequentially from stored version to current version (e.g., v1→v2→v3), update `__v` after each step | E31 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:25:00Z |
 | 29 | Wire migration into `AdapterBridge` deserialize pipeline — after deserialize (and decrypt if applicable), run migration check and apply migrations on each entity before returning data to store | E31 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:25:00Z |
-| 30 | Update `__strata` marker blob to track schema versions — store current version per entity type, detect version changes on startup to trigger re-processing of affected partitions | E31 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:25:00Z |
+| 30 | Update `__fyredb` marker blob to track schema versions — store current version per entity type, detect version changes on startup to trigger re-processing of affected partitions | E31 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:25:00Z |
 | 31 | Update barrel exports for schema migration — export `migrations` option type and version-related types from `src/schema/index.ts` | E31 | developer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:25:00Z |
 
 ### Phase 5 — Review & Verification
@@ -157,7 +157,7 @@ Dependency order: E28 → E29 → E30, E29 → E31. Phase 1 (E28) must complete 
 |---|------|------|----------|--------|--------|---------|----------|
 | 32 | Review Phase 1 — `StorageAdapter` interface, `AdapterBridge` serialize/deserialize/key-namespacing, `MemoryStorageAdapter`, type safety and design doc alignment | E28 | reviewer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:30:00Z |
 | 33 | Review Phase 2 — Encryption primitives for Web Crypto correctness, secure key handling, IV uniqueness, proper error propagation | E29 | reviewer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:30:00Z |
-| 34 | Review Phase 3 — DEK bootstrap/load lifecycle, password change flow, enable/disable encryption, `createStrata()` wiring, edge cases | E30 | reviewer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:30:00Z |
+| 34 | Review Phase 3 — DEK bootstrap/load lifecycle, password change flow, enable/disable encryption, `createFyreDb()` wiring, edge cases | E30 | reviewer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:30:00Z |
 | 35 | Review Phase 4 — Schema migration version tracking, migration runner correctness, pipeline integration, backward compatibility | E31 | reviewer | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:30:00Z |
 
 ### Phase 6 — Unit Tests
@@ -175,7 +175,7 @@ Dependency order: E28 → E29 → E30, E29 → E31. Phase 1 (E28) must complete 
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|----------|
 | 41 | Integration test — `AdapterBridge` end-to-end: `MemoryStorageAdapter` → `AdapterBridge` → `BlobAdapter` interface, write `PartitionBlob`, read back, verify round-trip | E28 | integration-tester | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:35:00Z |
-| 42 | Integration test — encrypted `createStrata` lifecycle: init with password, save entities, dispose, re-init with same password reads data, re-init with wrong password throws | E30 | integration-tester | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:35:00Z |
+| 42 | Integration test — encrypted `createFyreDb` lifecycle: init with password, save entities, dispose, re-init with same password reads data, re-init with wrong password throws | E30 | integration-tester | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:35:00Z |
 | 43 | Integration test — password change: init encrypted, save data, change password, dispose, re-init with new password reads data, old password throws | E30 | integration-tester | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:35:00Z |
 | 44 | Integration test — enable/disable encryption: init unencrypted, save data, enable encryption, verify data readable, disable encryption, verify data readable unencrypted | E30 | integration-tester | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:35:00Z |
 | 45 | Integration test — schema migration on load: save entity at v1, update definition to v2 with migration, reload, verify entity migrated correctly with `__v` updated | E31 | integration-tester | done | plan | 2026-03-26T10:00:00Z | 2026-03-26T18:35:00Z |
@@ -188,23 +188,23 @@ Started: 2026-03-25T08:00:00Z
 
 Epics: E27 (shared-types-typed-adapter)
 
-Normalize all adapter data to `PartitionBlob`. Type `BlobAdapter.read()` to return `PartitionBlob | null` and `BlobAdapter.write()` to accept `PartitionBlob`. Restructure `__strata` marker and `__tenants` list as PartitionBlob-format blobs. Remove `MarkerBlob` and `TenantListBlob` types. Keep `Tenant` in `tenant/types.ts` and `PartitionBlob` in `persistence/types.ts` — no `src/types/` shared module needed. Fix `example/app-fs.ts`.
+Normalize all adapter data to `PartitionBlob`. Type `BlobAdapter.read()` to return `PartitionBlob | null` and `BlobAdapter.write()` to accept `PartitionBlob`. Restructure `__fyredb` marker and `__tenants` list as PartitionBlob-format blobs. Remove `MarkerBlob` and `TenantListBlob` types. Keep `Tenant` in `tenant/types.ts` and `PartitionBlob` in `persistence/types.ts` — no `src/types/` shared module needed. Fix `example/app-fs.ts`.
 
 ### Phase 1 — Type the BlobAdapter Interface
 
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|----------|
-| 1 | Update `BlobAdapter` interface in `src/adapter/types.ts` — change `read()` return type from `Promise<unknown>` to `Promise<PartitionBlob \| null>`, change `write()` data param from `unknown` to `PartitionBlob`, import `PartitionBlob` from `@strata/persistence` | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:20:00Z |
-| 2 | Move `Tenant` type definition from `src/adapter/types.ts` back to `src/tenant/types.ts`; update `src/adapter/types.ts` to import `Tenant` from `@strata/tenant`; update barrel re-exports to preserve public API | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:22:00Z |
+| 1 | Update `BlobAdapter` interface in `src/adapter/types.ts` — change `read()` return type from `Promise<unknown>` to `Promise<PartitionBlob \| null>`, change `write()` data param from `unknown` to `PartitionBlob`, import `PartitionBlob` from `@/persistence` | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:20:00Z |
+| 2 | Move `Tenant` type definition from `src/adapter/types.ts` back to `src/tenant/types.ts`; update `src/adapter/types.ts` to import `Tenant` from `@/tenant`; update barrel re-exports to preserve public API | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:22:00Z |
 | 3 | Update `MemoryBlobAdapter` in `src/adapter/memory.ts` — store `PartitionBlob` values instead of `unknown`, use structured clone for defensive copy on `PartitionBlob` objects | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:24:00Z |
 
-### Phase 2 — Restructure `__strata` Marker as PartitionBlob
+### Phase 2 — Restructure `__fyredb` Marker as PartitionBlob
 
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|----------|
-| 4 | Restructure `__strata` marker blob to PartitionBlob format in `src/tenant/marker-blob.ts` — store marker data (version, createdAt, entityTypes, indexes) as an entity keyed by a well-known ID within a system partition; remove `MarkerBlob` type | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:26:00Z |
+| 4 | Restructure `__fyredb` marker blob to PartitionBlob format in `src/tenant/marker-blob.ts` — store marker data (version, createdAt, entityTypes, indexes) as an entity keyed by a well-known ID within a system partition; remove `MarkerBlob` type | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:26:00Z |
 | 5 | Update `writeMarkerBlob` and `readMarkerBlob` in `src/tenant/marker-blob.ts` to produce and consume `PartitionBlob` format instead of the removed `MarkerBlob` type | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:26:00Z |
-| 6 | Update `loadAllIndexes`/`saveAllIndexes` in `src/persistence/partition-index.ts` to read/write indexes from the restructured `__strata` PartitionBlob | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:28:00Z |
+| 6 | Update `loadAllIndexes`/`saveAllIndexes` in `src/persistence/partition-index.ts` to read/write indexes from the restructured `__fyredb` PartitionBlob | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:28:00Z |
 
 ### Phase 3 — Restructure `__tenants` List as PartitionBlob
 
@@ -219,7 +219,7 @@ Normalize all adapter data to `PartitionBlob`. Type `BlobAdapter.read()` to retu
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|----------|
 | 10 | Update `src/store/store.ts` BlobAdapter methods (`read`, `write`) to return/accept `PartitionBlob` instead of `unknown` | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:34:00Z |
-| 11 | Update all framework code that consumes adapter `read()` results to use `PartitionBlob` instead of `unknown` — sync modules (`src/sync/`), tenant modules (`src/tenant/`), strata entry point (`src/strata.ts`) | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:34:00Z |
+| 11 | Update all framework code that consumes adapter `read()` results to use `PartitionBlob` instead of `unknown` — sync modules (`src/sync/`), tenant modules (`src/tenant/`), fyredb entry point (`src/fyredb.ts`) | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:34:00Z |
 | 12 | Fix `example/app-fs.ts` — replace broken `Meta` import with `Tenant`, update FS adapter to conform to typed `PartitionBlob` BlobAdapter interface | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:36:00Z |
 
 ### Phase 5 — Cleanup
@@ -233,7 +233,7 @@ Normalize all adapter data to `PartitionBlob`. Type `BlobAdapter.read()` to retu
 
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|----------|
-| 15 | Update all unit and integration tests for `PartitionBlob`-typed BlobAdapter, restructured `__strata` marker, and restructured `__tenants` list | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:40:00Z |
+| 15 | Update all unit and integration tests for `PartitionBlob`-typed BlobAdapter, restructured `__fyredb` marker, and restructured `__tenants` list | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:40:00Z |
 | 16 | Review all changes for type safety, design alignment, and completeness | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:40:00Z |
 | 17 | Build (`npm run build`) and verify all tests pass (`npm test`) | E27 | developer | done | plan | 2026-03-25T08:00:00Z | 2026-03-25T06:40:00Z |
 
@@ -257,7 +257,7 @@ Major refactor: BlobAdapter switches from Uint8Array to typed JS objects, `meta:
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|-----------|
 | 4 | Update `MemoryBlobAdapter` in `src/adapter/memory.ts`: store JS objects instead of `Uint8Array` (use structured clone for defensive copy), accept `Tenant \| undefined` instead of `Meta` in all methods | unified-sync-refactor | developer | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:15:00Z |
-| 5 | Rename all `EntityStore` call sites: `store.get`→`store.getEntity`, `store.set`→`store.setEntity`, `store.delete`→`store.deleteEntity` across `src/store/store.ts`, `src/repo/`, `src/sync/`, and `src/strata.ts` | unified-sync-refactor | developer | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:15:00Z |
+| 5 | Rename all `EntityStore` call sites: `store.get`→`store.getEntity`, `store.set`→`store.setEntity`, `store.delete`→`store.deleteEntity` across `src/store/store.ts`, `src/repo/`, `src/sync/`, and `src/fyredb.ts` | unified-sync-refactor | developer | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:15:00Z |
 | 6 | Implement BlobAdapter methods on `Store` class in `src/store/store.ts`: `read(tenant, key)` returns partition data as `PartitionBlob`, `write(tenant, key, data)` loads partition data from blob into Maps, `delete(tenant, key)` clears a partition, `list(tenant, prefix)` returns matching entity keys | unified-sync-refactor | developer | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:15:00Z |
 
 ### Phase 3 — Remove serialize/deserialize from Internals
@@ -280,7 +280,7 @@ Major refactor: BlobAdapter switches from Uint8Array to typed JS objects, `meta:
 
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|-----------|
-| 13 | Update `Strata` class in `src/strata.ts`: remove `FlushScheduler` dependency and `flushScheduler` field, replace `hydrateFromLocal` fallback with `syncBetween(localAdapter, store, ...)`, pass `Tenant` objects instead of `tenant.meta` throughout | unified-sync-refactor | developer | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:30:00Z |
+| 13 | Update `FyreDb` class in `src/fyredb.ts`: remove `FlushScheduler` dependency and `flushScheduler` field, replace `hydrateFromLocal` fallback with `syncBetween(localAdapter, store, ...)`, pass `Tenant` objects instead of `tenant.meta` throughout | unified-sync-refactor | developer | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:30:00Z |
 | 14 | Update tenant system to accept `Tenant \| undefined` instead of `Meta`: `loadTenantList`, `saveTenantList`, `writeMarkerBlob`, `readMarkerBlob`, `saveTenantPrefs`, `loadTenantPrefs`, `pushTenantList`, `pullTenantList`, and `TenantManager` internals | unified-sync-refactor | developer | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:30:00Z |
 | 15 | Update barrel exports: `src/store/index.ts` (remove `flushAll`, `flushPartition`, `FlushScheduler`, `createFlushScheduler`, `FlushSchedulerOptions`), `src/sync/index.ts` (remove `hydrateFromLocal`), `src/adapter/index.ts` (remove `Meta` export) | unified-sync-refactor | developer | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:30:00Z |
 
@@ -288,7 +288,7 @@ Major refactor: BlobAdapter switches from Uint8Array to typed JS objects, `meta:
 
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|-----------|
-| 16 | Review all changes for type safety, design alignment, and completeness across adapter, store, sync, tenant, and strata modules | unified-sync-refactor | reviewer | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:55:00Z |
+| 16 | Review all changes for type safety, design alignment, and completeness across adapter, store, sync, tenant, and fyredb modules | unified-sync-refactor | reviewer | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:55:00Z |
 | 17 | Update unit tests: `BlobAdapter`/`MemoryBlobAdapter` tests for JS objects and Tenant param, `EntityStore` tests for renamed methods and new BlobAdapter methods, sync tests for `syncBetween` with store-as-adapter, tenant tests for Tenant param | unified-sync-refactor | unit-tester | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:55:00Z |
 | 18 | Update integration tests: end-to-end flows with new BlobAdapter interface, `syncBetween` for memory↔local↔cloud, tenant lifecycle with Tenant objects, verify `FlushScheduler` and `hydrateFromLocal` removal has no regressions | unified-sync-refactor | integration-tester | done | plan | 2026-03-24T21:00:00Z | 2026-03-24T21:55:00Z |
 
@@ -309,18 +309,18 @@ Started: 2026-03-24T12:00:00Z
 | 10 | Update `src/sync/index.ts` exports | index-consolidation | developer | done | plan | 2026-03-24T12:00:00Z | 2026-03-24T12:58:00Z |
 | 11 | Update all tests for new API | index-consolidation | developer | done | plan | 2026-03-24T12:00:00Z | 2026-03-24T12:58:00Z |
 
-## Sprint — Merge `__strata` marker blob and `__index` into single `__strata` blob
+## Sprint — Merge `__fyredb` marker blob and `__index` into single `__fyredb` blob
 Started: 2026-03-24T15:00:00Z
 
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|-----------|
-| 1 | Update `MarkerBlob` type and `writeMarkerBlob` to include `indexes` field | merge-strata-blob | developer | done | plan | 2026-03-24T15:00:00Z | 2026-03-24T15:05:00Z |
-| 2 | Update `loadAllIndexes`/`saveAllIndexes` to read/write from `__strata` blob | merge-strata-blob | developer | done | plan | 2026-03-24T15:00:00Z | 2026-03-24T15:05:00Z |
-| 3 | Remove `INDEX_KEY` from `src/adapter/keys.ts` and `src/adapter/index.ts` | merge-strata-blob | developer | done | plan | 2026-03-24T15:00:00Z | 2026-03-24T15:05:00Z |
-| 4 | Update partition-index test for new storage location | merge-strata-blob | developer | done | plan | 2026-03-24T15:00:00Z | 2026-03-24T15:05:00Z |
-| 5 | Review all changes | merge-strata-blob | reviewer | done | plan | 2026-03-24T15:00:00Z | 2026-03-24T15:08:00Z |
-| 6 | Unit tests | merge-strata-blob | unit-tester | done | test | 2026-03-24T15:00:00Z | 2026-03-24T15:10:00Z |
-| 7 | Integration tests | merge-strata-blob | integration-tester | done | test | 2026-03-24T15:00:00Z | 2026-03-24T15:10:00Z |
+| 1 | Update `MarkerBlob` type and `writeMarkerBlob` to include `indexes` field | merge-fyredb-blob | developer | done | plan | 2026-03-24T15:00:00Z | 2026-03-24T15:05:00Z |
+| 2 | Update `loadAllIndexes`/`saveAllIndexes` to read/write from `__fyredb` blob | merge-fyredb-blob | developer | done | plan | 2026-03-24T15:00:00Z | 2026-03-24T15:05:00Z |
+| 3 | Remove `INDEX_KEY` from `src/adapter/keys.ts` and `src/adapter/index.ts` | merge-fyredb-blob | developer | done | plan | 2026-03-24T15:00:00Z | 2026-03-24T15:05:00Z |
+| 4 | Update partition-index test for new storage location | merge-fyredb-blob | developer | done | plan | 2026-03-24T15:00:00Z | 2026-03-24T15:05:00Z |
+| 5 | Review all changes | merge-fyredb-blob | reviewer | done | plan | 2026-03-24T15:00:00Z | 2026-03-24T15:08:00Z |
+| 6 | Unit tests | merge-fyredb-blob | unit-tester | done | test | 2026-03-24T15:00:00Z | 2026-03-24T15:10:00Z |
+| 7 | Integration tests | merge-fyredb-blob | integration-tester | done | test | 2026-03-24T15:00:00Z | 2026-03-24T15:10:00Z |
 
 
 <!-- Status values: not-started, in-progress, done, known-issue, skipped -->
@@ -403,7 +403,7 @@ Epics: E1 (HLC), E3 (Adapter types), E4 (MemoryAdapter), E2 (Schema), E6 (Reacti
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|-----------|
 | 6 | Define `BlobAdapter` type with 4 async methods (`read`, `write`, `delete`, `list`) accepting `meta: Readonly<Record<string, unknown>> \| undefined` as first param in `src/adapter/` | E3 | developer | done | plan | 2026-03-23T20:30:00Z | 2026-03-23T20:38:00Z |
-| 7 | Define framework blob key constants/helpers — `__tenants`, `__strata`, `__index.{entityName}`, `{entityName}.{partitionKey}` patterns | E3 | developer | done | plan | 2026-03-23T20:30:00Z | 2026-03-23T20:38:00Z |
+| 7 | Define framework blob key constants/helpers — `__tenants`, `__fyredb`, `__index.{entityName}`, `{entityName}.{partitionKey}` patterns | E3 | developer | done | plan | 2026-03-23T20:30:00Z | 2026-03-23T20:38:00Z |
 
 ### E4 — MemoryBlobAdapter
 
@@ -516,9 +516,9 @@ Epics: E8 (Store — Debounced flush), E12 (Repository — CRUD & query), E16 (T
 | 15 | Define `Tenant` type (`id`, `name`, `icon?`, `color?`, `meta`, `createdAt`, `updatedAt`) and `TenantManager` type (list, create, setup, load, delink, delete, `activeTenant$`) in `src/tenant/` | E16 | developer | done | plan | 2026-03-23T21:30:00Z | 2026-03-23T22:13:00Z |
 | 16 | Implement tenant list persistence — `loadTenantList(adapter): Promise<Tenant[]>` reads `__tenants` blob with `meta = undefined`, deserializes; `saveTenantList(adapter, tenants): Promise<void>` serializes and writes | E16 | developer | done | plan | 2026-03-23T21:30:00Z | 2026-03-23T22:13:00Z |
 | 17 | Implement `TenantManager.list()` — returns all tenants from local adapter via `loadTenantList`, cached after first load | E16 | developer | done | plan | 2026-03-23T21:30:00Z | 2026-03-23T22:13:00Z |
-| 18 | Implement `TenantManager.create(opts)` — generates or derives tenant ID (via `deriveTenantId` if configured), creates `Tenant` record with timestamps, appends to tenant list, writes `__strata` marker blob at `meta` location | E16 | developer | done | plan | 2026-03-23T21:30:00Z | 2026-03-23T22:13:00Z |
+| 18 | Implement `TenantManager.create(opts)` — generates or derives tenant ID (via `deriveTenantId` if configured), creates `Tenant` record with timestamps, appends to tenant list, writes `__fyredb` marker blob at `meta` location | E16 | developer | done | plan | 2026-03-23T21:30:00Z | 2026-03-23T22:13:00Z |
 | 19 | Implement `TenantManager.load(tenantId)` — finds tenant by ID in list, sets as active tenant, updates `activeTenant$` observable; throws if tenant ID not found | E16 | developer | done | plan | 2026-03-23T21:30:00Z | 2026-03-23T22:13:00Z |
-| 20 | Implement `TenantManager.setup(opts)` — reads `__strata` marker blob from `meta` location to detect existing workspace, reads tenant prefs (name/icon/color), derives deterministic tenant ID, adds to local tenant list | E16 | developer | done | plan | 2026-03-23T21:30:00Z | 2026-03-23T22:13:00Z |
+| 20 | Implement `TenantManager.setup(opts)` — reads `__fyredb` marker blob from `meta` location to detect existing workspace, reads tenant prefs (name/icon/color), derives deterministic tenant ID, adds to local tenant list | E16 | developer | done | plan | 2026-03-23T21:30:00Z | 2026-03-23T22:13:00Z |
 | 21 | Implement `TenantManager.delink(tenantId)` — removes tenant from local list only, persists updated list; does NOT delete cloud data | E16 | developer | done | plan | 2026-03-23T21:30:00Z | 2026-03-23T22:13:00Z |
 | 22 | Implement `TenantManager.delete(tenantId)` — removes tenant from local list AND deletes all blobs at the tenant's `meta` location via adapter | E16 | developer | done | plan | 2026-03-23T21:30:00Z | 2026-03-23T22:13:00Z |
 
@@ -579,9 +579,9 @@ Epics: E15 (Reactive — Batch writes & dispose), E18 (Tenant — Sharing, setup
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|-----------|
 | 7 | Define `MarkerBlob` type (`version: number`, `createdAt: Date`, `entityTypes: readonly string[]`) in `src/tenant/` | E18 | developer | done | plan | 2026-03-23T22:30:00Z | 2026-03-23T22:38:00Z |
-| 8 | Implement `writeMarkerBlob(adapter, meta, entityTypes)` — creates `MarkerBlob` with `version: 1`, current timestamp, and entity type names; serializes via `serialize()` and writes to `__strata` blob key | E18 | developer | done | plan | 2026-03-23T22:30:00Z | 2026-03-23T22:38:00Z |
-| 9 | Implement `readMarkerBlob(adapter, meta)` — reads `__strata` blob via adapter, deserializes via `deserialize()`, returns `MarkerBlob | undefined` if blob not found | E18 | developer | done | plan | 2026-03-23T22:30:00Z | 2026-03-23T22:38:00Z |
-| 10 | Implement `validateMarkerBlob(blob)` — checks `version` field is supported (currently version 1), returns boolean; used by `setup()` to reject incompatible strata workspaces | E18 | developer | done | plan | 2026-03-23T22:30:00Z | 2026-03-23T22:38:00Z |
+| 8 | Implement `writeMarkerBlob(adapter, meta, entityTypes)` — creates `MarkerBlob` with `version: 1`, current timestamp, and entity type names; serializes via `serialize()` and writes to `__fyredb` blob key | E18 | developer | done | plan | 2026-03-23T22:30:00Z | 2026-03-23T22:38:00Z |
+| 9 | Implement `readMarkerBlob(adapter, meta)` — reads `__fyredb` blob via adapter, deserializes via `deserialize()`, returns `MarkerBlob | undefined` if blob not found | E18 | developer | done | plan | 2026-03-23T22:30:00Z | 2026-03-23T22:38:00Z |
+| 10 | Implement `validateMarkerBlob(blob)` — checks `version` field is supported (currently version 1), returns boolean; used by `setup()` to reject incompatible fyredb workspaces | E18 | developer | done | plan | 2026-03-23T22:30:00Z | 2026-03-23T22:38:00Z |
 | 11 | Update `TenantManager.create()` to call `writeMarkerBlob` with registered entity type names when creating marker blob at the tenant's `meta` location | E18 | developer | done | plan | 2026-03-23T22:30:00Z | 2026-03-23T22:38:00Z |
 | 12 | Update `TenantManager.setup()` to call `readMarkerBlob` and `validateMarkerBlob`; read tenant prefs from shared `meta` location via `loadTenantPrefs`; derive deterministic tenant ID via `deriveTenantId(meta)` | E18 | developer | done | plan | 2026-03-23T22:30:00Z | 2026-03-23T22:38:00Z |
 | 13 | Write unit tests for marker blob — `writeMarkerBlob`/`readMarkerBlob` round-trip, `readMarkerBlob` returns `undefined` for missing blob, `validateMarkerBlob` accepts version 1 and rejects unsupported versions, entity types array persisted correctly | E18 | developer | done | plan | 2026-03-23T22:30:00Z | 2026-03-23T22:42:00Z |
@@ -660,30 +660,30 @@ Epics: E21 (Tombstones & retention), E22 (Three-phase model, scheduler & global 
 ## Sprint 8 — Framework Entry Point & Graceful Shutdown (Final Sprint)
 Started: 2026-03-24T00:00:00Z
 
-Epics: E24 (Framework Entry Point — createStrata()), E25 (Framework — Graceful shutdown & dispose)
+Epics: E24 (Framework Entry Point — createFyreDb()), E25 (Framework — Graceful shutdown & dispose)
 
-### E24 — Framework Entry Point: createStrata() (Layer 9)
+### E24 — Framework Entry Point: createFyreDb() (Layer 9)
 
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|----------|
-| 1 | Define `StrataConfig` type in `src/` root — `entities: EntityDefinition[]`, `localAdapter: BlobAdapter`, `cloudAdapter?: BlobAdapter`, `deviceId: string`, and `StrataOptions` (optional `flushDebounceMs`, `cloudSyncIntervalMs`, `localFlushIntervalMs`, `tombstoneRetentionMs` with defaults) | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
-| 2 | Define `Strata` type in `src/` root — public API surface: `tenants: TenantManager`, `repo(def): Repository<T>`, `sync(): Promise<SyncResult>`, `dispose(): Promise<void>`, `isDirty: boolean`, `isDirty$: Observable<boolean>`, `onSyncEvent(listener)`, `offSyncEvent(listener)` | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
+| 1 | Define `FyreDbConfig` type in `src/` root — `entities: EntityDefinition[]`, `localAdapter: BlobAdapter`, `cloudAdapter?: BlobAdapter`, `deviceId: string`, and `FyreDbOptions` (optional `flushDebounceMs`, `cloudSyncIntervalMs`, `localFlushIntervalMs`, `tombstoneRetentionMs` with defaults) | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
+| 2 | Define `FyreDb` type in `src/` root — public API surface: `tenants: TenantManager`, `repo(def): Repository<T>`, `sync(): Promise<SyncResult>`, `dispose(): Promise<void>`, `isDirty: boolean`, `isDirty$: Observable<boolean>`, `onSyncEvent(listener)`, `offSyncEvent(listener)` | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
 | 3 | Implement `validateEntityDefinitions(entities)` in `src/` root — reject duplicate entity names, empty entity list, missing name fields; throw descriptive errors on validation failure | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
-| 4 | Implement `createStrata(config)` core setup — validate entity defs via `validateEntityDefinitions`, create HLC via `createHlc(config.deviceId)`, create event bus via `createEventBus()`, create in-memory store via `createStore()`, create flush scheduler via `createFlushScheduler` with configured debounce interval | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
-| 5 | Implement repository creation within `createStrata` — iterate entity definitions, create `Repository<T>` or `SingletonRepository<T>` per key strategy (singleton strategy → SingletonRepository, otherwise → Repository), build lookup `Map<EntityDefinition, Repository>` keyed by definition reference; expose `strata.repo(def)` accessor that retrieves from map | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
-| 6 | Implement sync infrastructure wiring within `createStrata` — create sync lock via `createSyncLock()`, create sync event emitter via `createSyncEventEmitter()`, create dirty tracker via `createDirtyTracker()`, create sync scheduler via `createSyncScheduler` with configured intervals (starts idle until tenant loads) | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
-| 7 | Implement tenant manager wiring within `createStrata` — create `TenantManager` with local adapter and optional cloud adapter; expose as `strata.tenants` | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
+| 4 | Implement `createFyreDb(config)` core setup — validate entity defs via `validateEntityDefinitions`, create HLC via `createHlc(config.deviceId)`, create event bus via `createEventBus()`, create in-memory store via `createStore()`, create flush scheduler via `createFlushScheduler` with configured debounce interval | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
+| 5 | Implement repository creation within `createFyreDb` — iterate entity definitions, create `Repository<T>` or `SingletonRepository<T>` per key strategy (singleton strategy → SingletonRepository, otherwise → Repository), build lookup `Map<EntityDefinition, Repository>` keyed by definition reference; expose `fyredb.repo(def)` accessor that retrieves from map | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
+| 6 | Implement sync infrastructure wiring within `createFyreDb` — create sync lock via `createSyncLock()`, create sync event emitter via `createSyncEventEmitter()`, create dirty tracker via `createDirtyTracker()`, create sync scheduler via `createSyncScheduler` with configured intervals (starts idle until tenant loads) | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
+| 7 | Implement tenant manager wiring within `createFyreDb` — create `TenantManager` with local adapter and optional cloud adapter; expose as `fyredb.tenants` | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
 | 8 | Implement hydrate-on-tenant-load — when `tenants.load(tenantId)` resolves, trigger Phase 1 hydrate: if cloud adapter present, attempt `hydrateFromCloud` with tenant's `meta`; on cloud failure emit `cloud-unreachable` event and fall back to `hydrateFromLocal`; start sync scheduler after hydrate completes | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
-| 9 | Implement `strata.sync()` — delegate to `syncNow()` via sync lock using active tenant's `meta`; reject with descriptive error if no tenant loaded or no cloud adapter configured; return `Promise<SyncResult>` | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
-| 10 | Expose sync events and dirty state on Strata instance — wire `strata.onSyncEvent(listener)` / `strata.offSyncEvent(listener)` to sync event emitter; expose `strata.isDirty` getter and `strata.isDirty$` observable from dirty tracker | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
-| 11 | Create barrel `index.ts` for `src/` root module — re-export `createStrata`, `StrataConfig`, `Strata`, `StrataOptions`, `defineEntity`, `EntityDefinition`, `BlobAdapter`, `BlobTransform`, and other public API types needed by consumers | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
+| 9 | Implement `fyredb.sync()` — delegate to `syncNow()` via sync lock using active tenant's `meta`; reject with descriptive error if no tenant loaded or no cloud adapter configured; return `Promise<SyncResult>` | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
+| 10 | Expose sync events and dirty state on FyreDb instance — wire `fyredb.onSyncEvent(listener)` / `fyredb.offSyncEvent(listener)` to sync event emitter; expose `fyredb.isDirty` getter and `fyredb.isDirty$` observable from dirty tracker | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
+| 11 | Create barrel `index.ts` for `src/` root module — re-export `createFyreDb`, `FyreDbConfig`, `FyreDb`, `FyreDbOptions`, `defineEntity`, `EntityDefinition`, `BlobAdapter`, `BlobTransform`, and other public API types needed by consumers | E24 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
 
 ### E25 — Framework: Graceful shutdown & dispose (Layer 9, depends on E24)
 
 | # | Task | Epic | Assigned | Status | Source | Created | Completed |
 |---|------|------|----------|--------|--------|---------|----------|
-| 12 | Implement `strata.dispose()` — stop sync scheduler via `syncScheduler.dispose()`, drain sync lock via `syncLock.drain()` (await in-flight sync), force immediate flush of all dirty partitions via `flushScheduler.flush()` (bypass debounce), dispose all repositories (complete subjects, remove event bus listeners), dispose flush scheduler | E25 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
-| 13 | Implement post-dispose guards on Strata instance — after dispose completes, `sync()` rejects with `Error('Strata instance is disposed')`, `repo()` throws, `tenants.load()` rejects; set internal `disposed` flag checked by all public methods before execution | E25 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
+| 12 | Implement `fyredb.dispose()` — stop sync scheduler via `syncScheduler.dispose()`, drain sync lock via `syncLock.drain()` (await in-flight sync), force immediate flush of all dirty partitions via `flushScheduler.flush()` (bypass debounce), dispose all repositories (complete subjects, remove event bus listeners), dispose flush scheduler | E25 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
+| 13 | Implement post-dispose guards on FyreDb instance — after dispose completes, `sync()` rejects with `Error('FyreDb instance is disposed')`, `repo()` throws, `tenants.load()` rejects; set internal `disposed` flag checked by all public methods before execution | E25 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
 | 14 | Implement `dispose()` idempotency — store the `Promise<void>` from first `dispose()` call; subsequent calls return the same promise without re-executing the shutdown sequence | E25 | developer | done | plan | 2026-03-24T00:00:00Z | 2026-03-24T06:05:00Z |
 
 ## Integration Testing
@@ -725,4 +725,4 @@ Epics: E11 (Persistence — Partition index), unified-sync (Unified sync logic)
 | 8 | Refactor `syncCloudCycle` in `src/sync/sync-scheduler.ts` to delegate to `syncBetween(localAdapter, cloudAdapter, store, entityNames, meta)` — replace manual diff/copy/merge/index-update logic with single `syncBetween` call | unified-sync | developer | done | plan | 2026-03-24T18:00:00Z | 2026-03-24T20:17:00Z |
 | 9 | Update `src/sync/index.ts` exports to expose `syncBetween` and `SyncBetweenResult` | unified-sync | developer | done | plan | 2026-03-24T18:00:00Z | 2026-03-24T20:17:00Z |
 | 10 | Unit tests for `deletedCount` in partition index and `syncBetween` | E11, unified-sync | unit-tester | done | test | 2026-03-24T20:18:00Z | 2026-03-24T20:20:00Z |
-| 11 | Integration tests for `syncBetween` with full Strata lifecycle | unified-sync | integration-tester | done | test | 2026-03-24T20:20:00Z | 2026-03-24T20:21:00Z |
+| 11 | Integration tests for `syncBetween` with full FyreDb lifecycle | unified-sync | integration-tester | done | test | 2026-03-24T20:20:00Z | 2026-03-24T20:21:00Z |

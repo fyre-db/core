@@ -1,5 +1,5 @@
 import {
-  Strata,
+  FyreDb,
   defineEntity,
 } from '@fyre-db/core';
 import { Pbkdf2EncryptionService, AesGcmEncryptionStrategy, InvalidEncryptionKeyError } from '@fyre-db/plugins';
@@ -17,7 +17,7 @@ async function main() {
     targets: ['local'],
     strategy: new AesGcmEncryptionStrategy(),
   });
-  const strata = new Strata({
+  const fyredb = new FyreDb({
     appId: 'demo',
     entities: [NoteDef],
     localAdapter: storage,
@@ -26,7 +26,7 @@ async function main() {
   });
 
   // 1. Create an encrypted tenant
-  const encrypted = await strata.tenants.create({
+  const encrypted = await fyredb.tenants.create({
     name: 'Secure',
     meta: {},
     encryption: { credential: 'secret123' },
@@ -34,15 +34,15 @@ async function main() {
   console.log('Created encrypted tenant:', encrypted.id);
 
   // 2. Create an unencrypted tenant
-  const unencrypted = await strata.tenants.create({
+  const unencrypted = await fyredb.tenants.create({
     name: 'Public',
     meta: {},
   });
   console.log('Created unencrypted tenant:', unencrypted.id);
 
   // 3. Open encrypted tenant with password, save notes, query
-  await strata.tenants.open(encrypted.id, { credential: 'secret123' });
-  const repo = strata.repo(NoteDef);
+  await fyredb.tenants.open(encrypted.id, { credential: 'secret123' });
+  const repo = fyredb.repo(NoteDef);
   repo.save({ title: 'Secret Note', body: 'Eyes only' });
   repo.save({ title: 'Another Secret', body: 'Classified' });
   const secureNotes = repo.query();
@@ -52,8 +52,8 @@ async function main() {
   }
 
   // 4. Switch to unencrypted tenant (no password needed)
-  await strata.tenants.open(unencrypted.id);
-  const pubRepo = strata.repo(NoteDef);
+  await fyredb.tenants.open(unencrypted.id);
+  const pubRepo = fyredb.repo(NoteDef);
   pubRepo.save({ title: 'Public Note', body: 'Visible to all' });
   const publicNotes = pubRepo.query();
   console.log('\n--- Unencrypted tenant notes ---');
@@ -63,14 +63,14 @@ async function main() {
 
   // 5. Try opening encrypted tenant WITHOUT password
   try {
-    await strata.tenants.open(encrypted.id);
+    await fyredb.tenants.open(encrypted.id);
   } catch {
     console.log('\nPassword required');
   }
 
   // 6. Try opening with WRONG password
   try {
-    await strata.tenants.open(encrypted.id, { credential: 'wrongpass' });
+    await fyredb.tenants.open(encrypted.id, { credential: 'wrongpass' });
   } catch (err) {
     if (err instanceof InvalidEncryptionKeyError) {
       console.log('Wrong password');
@@ -79,7 +79,7 @@ async function main() {
     }
   }
 
-  await strata.dispose();
+  await fyredb.dispose();
 
   // Show what's on disk
   console.log('\n--- Files on disk ---');

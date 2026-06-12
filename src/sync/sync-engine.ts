@@ -9,9 +9,9 @@ import type { BlobMigration } from '@/schema/migration';
 import type { DataAdapter } from '@/persistence';
 import { parseCompositeKey } from '@/utils';
 import type { ReactiveFlag } from '@/utils';
-import type { ResolvedStrataOptions } from '../options';
+import type { ResolvedFyreDbOptions } from '../options';
 import { SyncError } from './errors';
-import { StrataError } from '@/errors';
+import { FyreDbError } from '@/errors';
 import type {
   SyncLocation, SyncQueueItem, SyncEvent,
   SyncEnqueueResult, SyncBetweenResult,
@@ -38,7 +38,7 @@ export class SyncEngine {
     private readonly hlcRef: { current: Hlc },
     private readonly entityEventBus: EventBus<EntityEvent>,
     private readonly syncEventBus: EventBus<SyncEvent>,
-    private readonly options: ResolvedStrataOptions,
+    private readonly options: ResolvedFyreDbOptions,
     private readonly migrations?: ReadonlyArray<BlobMigration>,
   ) {
     this.markerStore = new MarkerStore(this.options);
@@ -115,7 +115,7 @@ export class SyncEngine {
         });
         log.sync('%s→%s sync complete', source, target);
       } catch (err) {
-        const error = err instanceof Error ? err : new StrataError(String(err), { kind: 'unknown' });
+        const error = err instanceof Error ? err : new FyreDbError(String(err), { kind: 'unknown' });
         this.syncEventBus.emit({ type: 'sync-failed', source, target, error });
         throw err;
       }
@@ -137,7 +137,7 @@ export class SyncEngine {
       const item = this.queue[0];
       const p = item.fn().then(
         () => { item.resolve(); },
-        (err: unknown) => { item.reject(err instanceof Error ? err : new StrataError(String(err), { kind: 'unknown' })); },
+        (err: unknown) => { item.reject(err instanceof Error ? err : new FyreDbError(String(err), { kind: 'unknown' })); },
       );
       this.inFlight = p;
       await p;
@@ -274,7 +274,7 @@ export class SyncEngine {
           }
         }
       } catch (err) {
-        const error = err instanceof Error ? err : new StrataError(String(err), { kind: 'unknown' });
+        const error = err instanceof Error ? err : new FyreDbError(String(err), { kind: 'unknown' });
         this.syncEventBus.emit({ type: 'sync-failed', source: 'local', target: 'cloud', error });
         log.sync.error('lazy-load %s from cloud failed: %O', entityKey, err);
       }

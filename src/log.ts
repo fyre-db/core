@@ -11,7 +11,7 @@ function createLogger(module: string) {
 }
 
 export const log = {
-  strata: createLogger('strata'),
+  fyredb: createLogger('fyredb'),
   repo: createLogger('repo'),
   store: createLogger('store'),
   sync: createLogger('sync'),

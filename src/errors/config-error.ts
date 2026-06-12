@@ -1,6 +1,6 @@
-export class StrataConfigError extends Error {
+export class FyreDbConfigError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'StrataConfigError';
+    this.name = 'FyreDbConfigError';
   }
 }

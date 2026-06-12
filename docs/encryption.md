@@ -13,7 +13,7 @@ npm install @fyre-db/plugins
 ```
 
 ```typescript
-import { Strata, defineEntity } from '@fyre-db/core';
+import { FyreDb, defineEntity } from '@fyre-db/core';
 import { Pbkdf2EncryptionService, AesGcmEncryptionStrategy } from '@fyre-db/plugins';
 
 const encryptionService = new Pbkdf2EncryptionService({
@@ -21,7 +21,7 @@ const encryptionService = new Pbkdf2EncryptionService({
   strategy: new AesGcmEncryptionStrategy(),
 });
 
-const strata = new Strata({
+const fyredb = new FyreDb({
   appId: 'my-app',
   entities: [taskDef],
   localAdapter: storage,
@@ -33,19 +33,19 @@ const strata = new Strata({
 ## Creating an Encrypted Tenant
 
 ```typescript
-const tenant = await strata.tenants.create({
+const tenant = await fyredb.tenants.create({
   name: 'Secure Workspace',
   meta: { folderId: 'secure-folder', space: 'drive' },
   encryption: { credential: 'user-secret' },
 });
 ```
 
-This generates a random Data Encryption Key (DEK) and stores it encrypted inside the `__strata` marker blob. All data blobs for this tenant are encrypted with the DEK.
+This generates a random Data Encryption Key (DEK) and stores it encrypted inside the `__fyredb` marker blob. All data blobs for this tenant are encrypted with the DEK.
 
 ## Opening an Encrypted Tenant
 
 ```typescript
-await strata.tenants.open(tenant.id, { credential: 'user-secret' });
+await fyredb.tenants.open(tenant.id, { credential: 'user-secret' });
 ```
 
 The credential is required every time an encrypted tenant is opened. The framework:
@@ -58,7 +58,7 @@ The credential is required every time an encrypted tenant is opened. The framewo
 
 ```typescript
 try {
-  await strata.tenants.open(tenantId, { credential: 'wrong-password' });
+  await fyredb.tenants.open(tenantId, { credential: 'wrong-password' });
 } catch (err) {
   if (err instanceof InvalidEncryptionKeyError) {
     // Wrong credential — prompt user to retry
@@ -77,7 +77,7 @@ Import `InvalidEncryptionKeyError` from `fyre-db/core`.
 ## Changing Credentials
 
 ```typescript
-await strata.tenants.changeCredential('old-password', 'new-password');
+await fyredb.tenants.changeCredential('old-password', 'new-password');
 ```
 
 This re-derives the KEK with the new credential and re-encrypts the marker blob. The DEK (which encrypts all data blobs) is unchanged — no data re-encryption needed.
@@ -89,21 +89,21 @@ Requires an active encrypted tenant. The old credential is verified before the c
 Encrypted and unencrypted tenants coexist on the same fyre-db instance:
 
 ```typescript
-const secureTenant = await strata.tenants.create({
+const secureTenant = await fyredb.tenants.create({
   name: 'Secure',
   meta: {},
   encryption: { credential: 'secret' },
 });
 
-const plainTenant = await strata.tenants.create({
+const plainTenant = await fyredb.tenants.create({
   name: 'Public',
   meta: {},
 });
 
-await strata.tenants.open(secureTenant.id, { credential: 'secret' });
+await fyredb.tenants.open(secureTenant.id, { credential: 'secret' });
 // ... encrypted data operations ...
 
-await strata.tenants.open(plainTenant.id);
+await fyredb.tenants.open(plainTenant.id);
 // ... unencrypted data operations ...
 ```
 
@@ -114,7 +114,7 @@ await strata.tenants.open(plainTenant.id);
 ```
 credential + appId → PBKDF2 (600K iterations, SHA-256) → KEK (AES-256-GCM)
                                                               │
-                                              Encrypts/decrypts __strata marker blob
+                                              Encrypts/decrypts __fyredb marker blob
                                               Marker blob contains DEK (base64)
                                                               │
                                               DEK encrypts all entity partition blobs
@@ -125,7 +125,7 @@ credential + appId → PBKDF2 (600K iterations, SHA-256) → KEK (AES-256-GCM)
 | Blob | Encrypted? | Key used |
 |---|---|---|
 | `__tenants` (tenant list) | Never — always plaintext | — |
-| `__strata` (marker blob) | Yes (encrypted tenants) | KEK |
+| `__fyredb` (marker blob) | Yes (encrypted tenants) | KEK |
 | Entity blobs (`task._`, etc.) | Yes (encrypted tenants) | DEK |
 
 ### Encrypted Data Format

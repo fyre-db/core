@@ -1,6 +1,6 @@
 import type { Tenant } from '@/adapter';
 import type { AllIndexes, PartitionBlob, DataAdapter } from '@/persistence';
-import type { ResolvedStrataOptions } from '../options';
+import type { ResolvedFyreDbOptions } from '../options';
 import { log } from '@/log';
 
 export type MarkerData = {
@@ -15,7 +15,7 @@ export async function writeMarkerBlob(
   adapter: DataAdapter,
   tenant: Tenant | undefined,
   entityTypes: readonly string[],
-  options: ResolvedStrataOptions,
+  options: ResolvedFyreDbOptions,
   keyData?: Record<string, unknown>,
 ): Promise<void> {
   const marker: MarkerData = {
@@ -36,7 +36,7 @@ export async function writeMarkerBlob(
 export async function readMarkerBlob(
   adapter: DataAdapter,
   tenant: Tenant | undefined,
-  options: ResolvedStrataOptions,
+  options: ResolvedFyreDbOptions,
 ): Promise<MarkerData | undefined> {
   const blob = await adapter.read(tenant, options.markerKey);
   if (!blob) return undefined;

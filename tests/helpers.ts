@@ -1,5 +1,5 @@
 import { resolveOptions } from '@/options';
-import type { ResolvedStrataOptions } from '@/options';
+import type { ResolvedFyreDbOptions } from '@/options';
 import { MemoryStorageAdapter, NOOP_ENCRYPTION_SERVICE, InvalidEncryptionKeyError } from '@/adapter';
 import type { StorageAdapter, EncryptionService, EncryptionStrategy, EncryptionKeys } from '@/adapter';
 import { EncryptedDataAdapter } from '@/persistence';
@@ -56,7 +56,7 @@ async function aesGcmDecrypt(data: Uint8Array, key: CryptoKey): Promise<Uint8Arr
   return new Uint8Array(plaintext);
 }
 
-export const DEFAULT_OPTIONS: ResolvedStrataOptions = resolveOptions();
+export const DEFAULT_OPTIONS: ResolvedFyreDbOptions = resolveOptions();
 
 const sharedContext = new TenantContext();
 
@@ -91,7 +91,7 @@ class TestAesGcmStrategy implements EncryptionStrategy<CryptoKey> {
 export function createTestEncryptionService(): EncryptionService {
   const strategy = new TestAesGcmStrategy();
   const tenantKey = '__tenants';
-  const markerKey = '__strata';
+  const markerKey = '__fyredb';
 
   function castKeys(keys: EncryptionKeys | null): Pbkdf2Keys | null {
     if (keys === null) return null;

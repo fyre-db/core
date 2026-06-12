@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { firstValueFrom, filter } from 'rxjs';
 import {
-  Strata,
+  FyreDb,
   defineEntity,
   MemoryStorageAdapter,
   serialize,
@@ -26,7 +26,7 @@ function createFailingAdapter(): StorageAdapter {
 }
 
 describe('Sync advanced integration', () => {
-  const instances: Strata[] = [];
+  const instances: FyreDb[] = [];
 
   afterEach(async () => {
     for (const s of instances) {
@@ -35,7 +35,7 @@ describe('Sync advanced integration', () => {
     instances.length = 0;
   });
 
-  function track(s: Strata): Strata {
+  function track(s: FyreDb): FyreDb {
     instances.push(s);
     return s;
   }
@@ -45,7 +45,7 @@ describe('Sync advanced integration', () => {
     const failingCloud = createFailingAdapter();
     const events: SyncEvent[] = [];
 
-    const strata = track(new Strata({
+    const fyredb = track(new FyreDb({
       appId: 'test',
       entities: [TaskDef],
       localAdapter,
@@ -53,9 +53,9 @@ describe('Sync advanced integration', () => {
       deviceId: 'dev-1',
     }));
 
-    strata.observe('sync').subscribe(e => events.push(e));
+    fyredb.observe('sync').subscribe(e => events.push(e));
 
-    const tenant = await strata.tenants.create({
+    const tenant = await fyredb.tenants.create({
       name: 'Test',
       meta: { bucket: 'test' },
     });
@@ -64,10 +64,10 @@ describe('Sync advanced integration', () => {
     (failingCloud as StorageAdapter & { startFailing(): void }).startFailing();
 
     // Load tenant — open is now lazy (no eager cloud sync)
-    await strata.tenants.open(tenant.id);
+    await fyredb.tenants.open(tenant.id);
 
     // Trigger lazy load — this will attempt to read from cloud and fail
-    const repo = strata.repo(TaskDef) as Repository<Task>;
+    const repo = fyredb.repo(TaskDef) as Repository<Task>;
     repo.query();
     // Wait for ensurePartition to complete (and fail)
     await new Promise(r => setTimeout(r, 50));
@@ -82,7 +82,7 @@ describe('Sync advanced integration', () => {
     const sharedCloud = new MemoryStorageAdapter();
     const localAdapter = new MemoryStorageAdapter();
 
-    const strata = track(new Strata({
+    const fyredb = track(new FyreDb({
       appId: 'test',
       entities: [TaskDef],
       localAdapter,
@@ -90,19 +90,19 @@ describe('Sync advanced integration', () => {
       deviceId: 'dev-1',
     }));
 
-    const tenant = await strata.tenants.create({
+    const tenant = await fyredb.tenants.create({
       name: 'Test',
       meta: { folder: 'shared' },
     });
-    await strata.tenants.open(tenant.id);
+    await fyredb.tenants.open(tenant.id);
 
-    const repo = strata.repo(TaskDef) as Repository<Task>;
+    const repo = fyredb.repo(TaskDef) as Repository<Task>;
     repo.save({ title: 'Item', done: false, priority: 1 });
 
     // Call sync() twice concurrently — sync lock should dedup
     const [r1, r2] = await Promise.all([
-      strata.tenants.sync(),
-      strata.tenants.sync(),
+      fyredb.tenants.sync(),
+      fyredb.tenants.sync(),
     ]);
 
     expect(r1).toBeDefined();
@@ -164,41 +164,41 @@ describe('Sync advanced integration', () => {
 
     // Device A
     const localA = new MemoryStorageAdapter();
-    const strataA = track(new Strata({
+    const fyredbA = track(new FyreDb({
       appId: 'test',
       entities: [TaskDef],
       localAdapter: localA,
       cloudAdapter: sharedCloud,
       deviceId: 'device-A',
     }));
-    const tenant = await strataA.tenants.create({
+    const tenant = await fyredbA.tenants.create({
       name: 'Shared',
       meta: { folder: 'shared' },
     });
-    await strataA.tenants.open(tenant.id);
+    await fyredbA.tenants.open(tenant.id);
 
-    const repoA = strataA.repo(TaskDef) as Repository<Task>;
+    const repoA = fyredbA.repo(TaskDef) as Repository<Task>;
     const id = repoA.save({ title: 'From A', done: false, priority: 1 });
-    await strataA.tenants.sync();
+    await fyredbA.tenants.sync();
 
     // Device B — hydrate from cloud via tenant load
     const localB = new MemoryStorageAdapter();
-    const strataB = track(new Strata({
+    const fyredbB = track(new FyreDb({
       appId: 'test',
       entities: [TaskDef],
       localAdapter: localB,
       cloudAdapter: sharedCloud,
       deviceId: 'device-B',
     }));
-    await strataB.tenants.create({
+    await fyredbB.tenants.create({
       name: 'Shared',
       meta: { folder: 'shared' },
       id: tenant.id,
     });
-    await strataB.tenants.open(tenant.id);
+    await fyredbB.tenants.open(tenant.id);
 
     // B's observe should emit the entity from A
-    const repoB = strataB.repo(TaskDef) as Repository<Task>;
+    const repoB = fyredbB.repo(TaskDef) as Repository<Task>;
     const entity = await firstValueFrom(repoB.observe(id).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
 
     expect(entity).toBeDefined();

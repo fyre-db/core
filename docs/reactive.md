@@ -7,7 +7,7 @@ fyre-db uses RxJS Observables to push data changes to your UI. When any entity o
 ## Observing a Single Entity
 
 ```typescript
-const repo = strata.repo(taskDef);
+const repo = fyredb.repo(taskDef);
 
 const task$ = repo.observe(taskId);
 task$.subscribe((task) => {
@@ -50,30 +50,30 @@ save(entity)
 
 The `EventBus<EntityEvent>` emits typed events with `{ entityName, source, updates, deletes }`. Observers filter by entity name and re-read from the in-memory Map. The `source` field distinguishes user mutations (`'user'`) from sync-imported changes (`'sync'`).
 
-## Strata-Level Observables
+## FyreDb-Level Observables
 
 ```typescript
 // Observe all entity events
-strata.observe('entity').subscribe((event) => {
+fyredb.observe('entity').subscribe((event) => {
   console.log(`${event.entityName}: ${event.updates.length} updated, ${event.deletes.length} deleted`);
 });
 
 // Observe events for a specific entity type
-strata.observe('entity', 'task').subscribe((event) => { /* ... */ });
+fyredb.observe('entity', 'task').subscribe((event) => { /* ... */ });
 
 // Observe sync lifecycle
-strata.observe('sync').subscribe((event) => {
+fyredb.observe('sync').subscribe((event) => {
   // event.type: 'sync-started' | 'sync-completed' | 'sync-failed'
   console.log(`${event.type}: ${event.source} → ${event.target}`);
 });
 
 // Observe dirty state
-strata.observe('dirty').subscribe((isDirty) => {
+fyredb.observe('dirty').subscribe((isDirty) => {
   showUnsavedIndicator(isDirty);
 });
 
 // Observe active tenant
-strata.observe('tenant').subscribe((tenant) => {
+fyredb.observe('tenant').subscribe((tenant) => {
   console.log(tenant ? `Active: ${tenant.name}` : 'No tenant');
 });
 ```
@@ -94,7 +94,7 @@ function useObservable<T>(observable$: Observable<T>, initial: T): T {
 }
 
 function TaskList() {
-  const repo = strata.repo(taskDef);
+  const repo = fyredb.repo(taskDef);
   const tasks = useObservable(
     repo.observeQuery({ where: { done: false } }),
     [],
@@ -115,7 +115,7 @@ For a batteries-included React integration, see `fyre-db/plugins/react` which pr
 ## Singleton Observation
 
 ```typescript
-const settings = strata.repo(settingsDef);
+const settings = fyredb.repo(settingsDef);
 const settings$ = settings.observe(); // no ID needed
 settings$.subscribe((s) => {
   console.log(s?.theme);
@@ -124,7 +124,7 @@ settings$.subscribe((s) => {
 
 ## Cleanup
 
-Call `subscription.unsubscribe()` when done (standard RxJS). When `strata.dispose()` is called, all EventBus subjects complete and active subscriptions end.
+Call `subscription.unsubscribe()` when done (standard RxJS). When `fyredb.dispose()` is called, all EventBus subjects complete and active subscriptions end.
 
 ## Performance
 

@@ -7,7 +7,7 @@ import { loadAllIndexes, saveAllIndexes } from '@/persistence';
 import { partitionHash, updatePartitionIndexEntry } from '@/persistence';
 import type { BlobMigration } from '@/schema/migration';
 import { migrateBlob } from '@/schema/migration';
-import type { ResolvedStrataOptions } from '../options';
+import type { ResolvedFyreDbOptions } from '../options';
 import { diffPartitions } from './diff';
 import { mergePartition } from './merge';
 import type { SyncEntity, SyncEntityChange, SyncBetweenResult } from './types';
@@ -49,7 +49,7 @@ async function buildPlan(
   adapterB: DataAdapter,
   entityNames: ReadonlyArray<string>,
   tenant: Tenant | undefined,
-  options: ResolvedStrataOptions,
+  options: ResolvedFyreDbOptions,
   migrations?: ReadonlyArray<BlobMigration>,
   partitionFilter?: PartitionFilter,
 ): Promise<SyncPlan> {
@@ -165,7 +165,7 @@ async function checkStale(
   adapter: DataAdapter,
   tenant: Tenant | undefined,
   snapshot: AllIndexes,
-  options: ResolvedStrataOptions,
+  options: ResolvedFyreDbOptions,
 ): Promise<{ stale: boolean; currentIndexes: AllIndexes }> {
   const current = await loadAllIndexes(adapter, tenant, options);
   for (const entityName of Object.keys(snapshot)) {
@@ -284,7 +284,7 @@ export async function syncBetween(
   adapterB: DataAdapter,
   entityNames: ReadonlyArray<string>,
   tenant: Tenant | undefined,
-  options: ResolvedStrataOptions,
+  options: ResolvedFyreDbOptions,
   migrations?: ReadonlyArray<BlobMigration>,
   partitionFilter?: PartitionFilter,
 ): Promise<SyncBetweenResult> {

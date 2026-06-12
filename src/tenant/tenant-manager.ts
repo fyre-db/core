@@ -1,7 +1,7 @@
 import type { EncryptionService, EncryptionKeys, StorageAdapter } from '@/adapter';
 import type { EntityStore } from '@/store';
 import type { DataAdapter } from '@/persistence';
-import type { ResolvedStrataOptions } from '../options';
+import type { ResolvedFyreDbOptions } from '../options';
 import type { SyncEngineType, SyncResult, SyncEvent } from '@/sync';
 import type { ReactiveFlag } from '@/utils';
 import type { EventBus } from '@/reactive';
@@ -31,7 +31,7 @@ export type TenantManagerDeps = {
   readonly dirtyTracker: ReactiveFlag;
   readonly encryptionService: EncryptionService;
   readonly tenantContext: TenantContext;
-  readonly options: ResolvedStrataOptions;
+  readonly options: ResolvedFyreDbOptions;
   readonly appId: string;
   readonly entityTypes: readonly string[];
   readonly rawCloudAdapter?: StorageAdapter;

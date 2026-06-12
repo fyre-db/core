@@ -1,7 +1,7 @@
 import { wrapAdapter } from '../helpers';
 import { describe, it, expect, afterEach } from 'vitest';
 import {
-  Strata,
+  FyreDb,
   defineEntity,
   MemoryStorageAdapter,
   partitioned,
@@ -22,7 +22,7 @@ const TransactionDef = defineEntity<Transaction>('transaction', {
 const ItemDef = defineEntity<Item>('item');
 
 describe('Persistence round-trip integration', () => {
-  const instances: Strata[] = [];
+  const instances: FyreDb[] = [];
 
   afterEach(async () => {
     for (const s of instances) {
@@ -31,7 +31,7 @@ describe('Persistence round-trip integration', () => {
     instances.length = 0;
   });
 
-  function track(s: Strata): Strata {
+  function track(s: FyreDb): FyreDb {
     instances.push(s);
     return s;
   }
@@ -39,31 +39,31 @@ describe('Persistence round-trip integration', () => {
   it('Date fields survive save → flush → reload cycle', async () => {
     const localAdapter = new MemoryStorageAdapter();
 
-    const strata1 = track(new Strata({
+    const fyredb1 = track(new FyreDb({
       appId: 'test',
       entities: [TransactionDef],
       localAdapter,
       deviceId: 'dev-1',
     }));
-    const tenant = await strata1.tenants.create({ name: 'W', meta: { b: 1 } });
-    await strata1.tenants.open(tenant.id);
+    const tenant = await fyredb1.tenants.create({ name: 'W', meta: { b: 1 } });
+    await fyredb1.tenants.open(tenant.id);
 
-    const repo1 = strata1.repo(TransactionDef) as Repository<Transaction>;
+    const repo1 = fyredb1.repo(TransactionDef) as Repository<Transaction>;
     const targetDate = new Date('2026-06-15T10:30:00.000Z');
     const id = repo1.save({ amount: 99.95, date: targetDate, accountId: 'checking' });
 
-    await strata1.dispose();
+    await fyredb1.dispose();
 
     // Reload
-    const strata2 = track(new Strata({
+    const fyredb2 = track(new FyreDb({
       appId: 'test',
       entities: [TransactionDef],
       localAdapter,
       deviceId: 'dev-1',
     }));
-    await strata2.tenants.open(tenant.id);
+    await fyredb2.tenants.open(tenant.id);
 
-    const repo2 = strata2.repo(TransactionDef) as Repository<Transaction>;
+    const repo2 = fyredb2.repo(TransactionDef) as Repository<Transaction>;
     const loaded = repo2.get(id);
 
     expect(loaded).toBeDefined();
@@ -79,21 +79,21 @@ describe('Persistence round-trip integration', () => {
   it('multiple partition keys → flush → each partition blob written separately', async () => {
     const localAdapter = new MemoryStorageAdapter();
 
-    const strata = track(new Strata({
+    const fyredb = track(new FyreDb({
       appId: 'test',
       entities: [TransactionDef],
       localAdapter,
       deviceId: 'dev-1',
     }));
-    const tenant = await strata.tenants.create({ name: 'W', meta: { b: 1 } });
-    await strata.tenants.open(tenant.id);
+    const tenant = await fyredb.tenants.create({ name: 'W', meta: { b: 1 } });
+    await fyredb.tenants.open(tenant.id);
 
-    const repo = strata.repo(TransactionDef) as Repository<Transaction>;
+    const repo = fyredb.repo(TransactionDef) as Repository<Transaction>;
     repo.save({ amount: 100, date: new Date(), accountId: 'checking' });
     repo.save({ amount: 200, date: new Date(), accountId: 'savings' });
     repo.save({ amount: 50, date: new Date(), accountId: 'checking' });
 
-    await strata.dispose();
+    await fyredb.dispose();
 
     // Verify separate partition blobs exist
     const da = wrapAdapter(localAdapter);
@@ -164,16 +164,16 @@ describe('Persistence round-trip integration', () => {
   it('entity version increments on re-save and persists', async () => {
     const localAdapter = new MemoryStorageAdapter();
 
-    const strata1 = track(new Strata({
+    const fyredb1 = track(new FyreDb({
       appId: 'test',
       entities: [ItemDef],
       localAdapter,
       deviceId: 'dev-1',
     }));
-    const tenant = await strata1.tenants.create({ name: 'W', meta: { b: 1 } });
-    await strata1.tenants.open(tenant.id);
+    const tenant = await fyredb1.tenants.create({ name: 'W', meta: { b: 1 } });
+    await fyredb1.tenants.open(tenant.id);
 
-    const repo1 = strata1.repo(ItemDef) as Repository<Item>;
+    const repo1 = fyredb1.repo(ItemDef) as Repository<Item>;
     const id = repo1.save({ name: 'Widget', category: 'A' });
     expect(repo1.get(id)?.version).toBe(1);
 
@@ -183,17 +183,17 @@ describe('Persistence round-trip integration', () => {
     repo1.save({ name: 'Widget v3', category: 'A', id } as Item & { id: string });
     expect(repo1.get(id)?.version).toBe(3);
 
-    await strata1.dispose();
+    await fyredb1.dispose();
 
-    const strata2 = track(new Strata({
+    const fyredb2 = track(new FyreDb({
       appId: 'test',
       entities: [ItemDef],
       localAdapter,
       deviceId: 'dev-1',
     }));
-    await strata2.tenants.open(tenant.id);
+    await fyredb2.tenants.open(tenant.id);
 
-    const repo2 = strata2.repo(ItemDef) as Repository<Item>;
+    const repo2 = fyredb2.repo(ItemDef) as Repository<Item>;
     const loaded = repo2.get(id);
     expect(loaded?.version).toBe(3);
     expect(loaded?.name).toBe('Widget v3');
@@ -202,20 +202,20 @@ describe('Persistence round-trip integration', () => {
   it('tombstones included in partition blob after delete', async () => {
     const localAdapter = new MemoryStorageAdapter();
 
-    const strata = track(new Strata({
+    const fyredb = track(new FyreDb({
       appId: 'test',
       entities: [ItemDef],
       localAdapter,
       deviceId: 'dev-1',
     }));
-    const tenant = await strata.tenants.create({ name: 'W', meta: { b: 1 } });
-    await strata.tenants.open(tenant.id);
+    const tenant = await fyredb.tenants.create({ name: 'W', meta: { b: 1 } });
+    await fyredb.tenants.open(tenant.id);
 
-    const repo = strata.repo(ItemDef) as Repository<Item>;
+    const repo = fyredb.repo(ItemDef) as Repository<Item>;
     const id = repo.save({ name: 'To Delete', category: 'temp' });
     repo.delete(id);
 
-    await strata.dispose();
+    await fyredb.dispose();
 
     // Verify the partition blob contains tombstone
     const da2 = wrapAdapter(localAdapter);

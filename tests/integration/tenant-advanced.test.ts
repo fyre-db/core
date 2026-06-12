@@ -1,7 +1,7 @@
 import { wrapAdapter } from '../helpers';
 import { describe, it, expect, afterEach } from 'vitest';
 import {
-  Strata,
+  FyreDb,
   defineEntity,
   MemoryStorageAdapter,
   saveTenantPrefs,
@@ -18,7 +18,7 @@ type Task = { title: string; done: boolean };
 const TaskDef = defineEntity<Task>('task');
 
 describe('Tenant advanced integration', () => {
-  const instances: Strata[] = [];
+  const instances: FyreDb[] = [];
 
   afterEach(async () => {
     for (const s of instances) {
@@ -27,7 +27,7 @@ describe('Tenant advanced integration', () => {
     instances.length = 0;
   });
 
-  function track(s: Strata): Strata {
+  function track(s: FyreDb): FyreDb {
     instances.push(s);
     return s;
   }
@@ -59,22 +59,22 @@ describe('Tenant advanced integration', () => {
     const localBDa = wrapAdapter(localBRaw);
 
     // Device A creates tenant X
-    const strataA = track(new Strata({
+    const fyredbA = track(new FyreDb({
       appId: 'test',
       entities: [TaskDef],
       localAdapter: localARaw,
       deviceId: 'dev-A',
     }));
-    await strataA.tenants.create({ name: 'Tenant X', meta: { b: 'x' } });
+    await fyredbA.tenants.create({ name: 'Tenant X', meta: { b: 'x' } });
 
     // Device B creates tenant Y
-    const strataB = track(new Strata({
+    const fyredbB = track(new FyreDb({
       appId: 'test',
       entities: [TaskDef],
       localAdapter: localBRaw,
       deviceId: 'dev-B',
     }));
-    await strataB.tenants.create({ name: 'Tenant Y', meta: { b: 'y' } });
+    await fyredbB.tenants.create({ name: 'Tenant Y', meta: { b: 'y' } });
 
     const opts = resolveOptions();
 

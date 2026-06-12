@@ -1,6 +1,6 @@
-export { Strata, validateEntityDefinitions } from './strata';
-export type { StrataConfig, StrataOptions, ResolvedStrataOptions } from './strata';
-export { resolveOptions } from './strata';
+export { FyreDb, validateEntityDefinitions } from './fyredb';
+export type { FyreDbConfig, FyreDbOptions, ResolvedFyreDbOptions } from './fyredb';
+export { resolveOptions } from './fyredb';
 
 export * from '@/hlc';
 export * from '@/adapter';

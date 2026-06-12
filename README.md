@@ -17,14 +17,14 @@ npm install @fyre-db/core
 ## Quick Start
 
 ```typescript
-import { Strata, MemoryStorageAdapter, defineEntity } from '@fyre-db/core';
+import { FyreDb, MemoryStorageAdapter, defineEntity } from '@fyre-db/core';
 
 // 1. Define your entities
 type Task = { title: string; done: boolean };
 const taskDef = defineEntity<Task>('task');
 
-// 2. Create a Strata instance
-const strata = new Strata({
+// 2. Create a FyreDb instance
+const fyredb = new FyreDb({
   appId: 'my-app',
   entities: [taskDef],
   localAdapter: new MemoryStorageAdapter(),
@@ -32,17 +32,17 @@ const strata = new Strata({
 });
 
 // 3. Create and open a tenant
-const tenant = await strata.tenants.create({ name: 'My Workspace', meta: {} });
-await strata.tenants.open(tenant.id);
+const tenant = await fyredb.tenants.create({ name: 'My Workspace', meta: {} });
+await fyredb.tenants.open(tenant.id);
 
 // 4. Use the repository
-const tasks = strata.repo(taskDef);
-const id = tasks.save({ title: 'Hello Strata', done: false });
-console.log(tasks.get(id));        // { title: 'Hello Strata', done: false, id: '...', ... }
+const tasks = fyredb.repo(taskDef);
+const id = tasks.save({ title: 'Hello FyreDb', done: false });
+console.log(tasks.get(id));        // { title: 'Hello FyreDb', done: false, id: '...', ... }
 console.log(tasks.query().length); // 1
 
 // 5. Clean up
-await strata.dispose();
+await fyredb.dispose();
 ```
 
 ## Features
@@ -61,7 +61,7 @@ await strata.dispose();
 ## Configuration
 
 ```typescript
-const strata = new Strata({
+const fyredb = new FyreDb({
   appId: 'my-app',                    // unique app identifier
   entities: [taskDef, noteDef],       // entity definitions
   localAdapter: myStorageAdapter,     // StorageAdapter implementation
@@ -80,13 +80,13 @@ const strata = new Strata({
 ## Lifecycle
 
 ```
-new Strata(config) → tenants.open(id) → use repos → dispose()
+new FyreDb(config) → tenants.open(id) → use repos → dispose()
 ```
 
-1. **`new Strata(config)`** — creates instance, validates entity definitions, initializes HLC and EventBus
-2. **`strata.tenants.open(tenantId)`** — loads tenant, hydrates data from local/cloud, starts sync scheduler
-3. **Use repos** — `strata.repo(entityDef)` for CRUD, queries, and reactive observations
-4. **`strata.dispose()`** — closes tenant, flushes to local, stops sync, cleans up
+1. **`new FyreDb(config)`** — creates instance, validates entity definitions, initializes HLC and EventBus
+2. **`fyredb.tenants.open(tenantId)`** — loads tenant, hydrates data from local/cloud, starts sync scheduler
+3. **Use repos** — `fyredb.repo(entityDef)` for CRUD, queries, and reactive observations
+4. **`fyredb.dispose()`** — closes tenant, flushes to local, stops sync, cleans up
 
 ## Guides
 

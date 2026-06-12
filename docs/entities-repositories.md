@@ -51,7 +51,7 @@ const settingsDef = defineEntity<Settings>('settings', {
 Returns a `SingletonRepository` instead of a `Repository`:
 
 ```typescript
-const settings = strata.repo(settingsDef);
+const settings = fyredb.repo(settingsDef);
 settings.save({ theme: 'dark', language: 'en' });
 const current = settings.get(); // no ID parameter
 settings.delete();
@@ -77,7 +77,7 @@ With `deriveId`, calling `save()` with the same derived ID updates the existing 
 ### `Repository<T>` — for global and partitioned entities
 
 ```typescript
-const repo = strata.repo(taskDef);
+const repo = fyredb.repo(taskDef);
 
 // Create / Update
 const id = repo.save({ title: 'New task', done: false, category: 'work' });
@@ -109,7 +109,7 @@ repo.deleteMany(ids);
 ### `SingletonRepository<T>` — for singleton entities
 
 ```typescript
-const settings = strata.repo(settingsDef);
+const settings = fyredb.repo(settingsDef);
 
 settings.save({ theme: 'dark', language: 'en' });
 const current = settings.get();

@@ -37,7 +37,7 @@ describe('writeMarkerBlob / readMarkerBlob', () => {
     expect(marker!.entityTypes).toEqual(['user', 'post', 'comment']);
   });
 
-  it('writes to __strata key', async () => {
+  it('writes to __fyredb key', async () => {
     const adapter = createDataAdapter();
     const tenant = makeTenant('t3', { f: '1' });
     await writeMarkerBlob(adapter, tenant, [], DEFAULT_OPTIONS);

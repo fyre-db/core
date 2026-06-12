@@ -7,7 +7,7 @@ All data in fyre-db is scoped to a tenant. A tenant represents a workspace, proj
 ## Creating Tenants
 
 ```typescript
-const tenant = await strata.tenants.create({
+const tenant = await fyredb.tenants.create({
   name: 'Work Project',
   meta: { folderId: 'abc123', space: 'drive' },
 });
@@ -23,7 +23,7 @@ The `meta` object is stored with the tenant and passed to every adapter call. Yo
 ## Opening Tenants
 
 ```typescript
-await strata.tenants.open(tenant.id);
+await fyredb.tenants.open(tenant.id);
 ```
 
 Opening a tenant:
@@ -37,7 +37,7 @@ Only one tenant can be active at a time. Opening a new tenant closes the previou
 ## Listing Tenants
 
 ```typescript
-const tenants = await strata.tenants.list();
+const tenants = await fyredb.tenants.list();
 for (const t of tenants) {
   console.log(`${t.name} (${t.id})`);
 }
@@ -48,10 +48,10 @@ The tenant list is cached in memory after the first call. Mutations (`create`, `
 ## Switching Tenants
 
 ```typescript
-await strata.tenants.open(workTenant.id);
+await fyredb.tenants.open(workTenant.id);
 // ... work with work data ...
 
-await strata.tenants.open(personalTenant.id);
+await fyredb.tenants.open(personalTenant.id);
 // previous tenant's data flushed, new tenant loaded
 ```
 
@@ -63,18 +63,18 @@ When two users share a cloud folder, they can connect to the same tenant using `
 
 ```typescript
 // User A creates a tenant pointing to a shared folder
-const tenant = await strata.tenants.create({
+const tenant = await fyredb.tenants.create({
   name: 'Shared Project',
   meta: { folderId: 'abc123', space: 'drive' },
 });
 
 // User B joins by pointing to the same folder
-const sharedTenant = await strata.tenants.join({
+const sharedTenant = await fyredb.tenants.join({
   meta: { folderId: 'abc123', space: 'sharedWithMe' },
 });
 ```
 
-`join()` reads the `__strata` marker blob at the given location to detect an existing workspace. It probes for existence and whether encryption is enabled, then adds the tenant to the local list.
+`join()` reads the `__fyredb` marker blob at the given location to detect an existing workspace. It probes for existence and whether encryption is enabled, then adds the tenant to the local list.
 
 ### Deterministic Tenant IDs
 
@@ -92,7 +92,7 @@ Both users sharing the same folder → same derived ID → sync connects them.
 Check if a workspace exists at a given location before joining:
 
 ```typescript
-const result = await strata.tenants.probe({
+const result = await fyredb.tenants.probe({
   meta: { folderId: 'abc123', space: 'drive' },
 });
 
@@ -122,10 +122,10 @@ When User B calls `join()`, the workspace name is imported from the shared locat
 
 ```typescript
 // Remove from local list only (cloud data preserved)
-await strata.tenants.remove(tenantId);
+await fyredb.tenants.remove(tenantId);
 
 // Remove from list AND delete all data blobs
-await strata.tenants.remove(tenantId, { purge: true });
+await fyredb.tenants.remove(tenantId, { purge: true });
 ```
 
 ## Manual Sync
@@ -133,7 +133,7 @@ await strata.tenants.remove(tenantId, { purge: true });
 Force an immediate sync cycle:
 
 ```typescript
-const result = await strata.tenants.sync();
+const result = await fyredb.tenants.sync();
 // result: { entitiesUpdated, conflictsResolved, partitionsSynced }
 ```
 
@@ -143,7 +143,7 @@ Runs `memory → local → cloud → local → memory`. Clears the dirty flag on
 
 ```typescript
 // Observe active tenant
-strata.observe('tenant').subscribe((tenant) => {
+fyredb.observe('tenant').subscribe((tenant) => {
   if (tenant) {
     console.log(`Active: ${tenant.name} (encrypted: ${tenant.encrypted})`);
   } else {

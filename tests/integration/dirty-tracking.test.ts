@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
-  Strata,
+  FyreDb,
   defineEntity,
   MemoryStorageAdapter,
 } from '@/index';
@@ -11,7 +11,7 @@ type Task = { title: string; done: boolean };
 const TaskDef = defineEntity<Task>('task');
 
 describe('Dirty tracking integration', () => {
-  const instances: Strata[] = [];
+  const instances: FyreDb[] = [];
 
   afterEach(async () => {
     for (const s of instances) {
@@ -20,13 +20,13 @@ describe('Dirty tracking integration', () => {
     instances.length = 0;
   });
 
-  function track(s: Strata): Strata {
+  function track(s: FyreDb): FyreDb {
     instances.push(s);
     return s;
   }
 
   it('isDirty transitions — false → true after save → false after sync', async () => {
-    const strata = track(new Strata({
+    const fyredb = track(new FyreDb({
       appId: 'test',
       entities: [TaskDef],
       localAdapter: new MemoryStorageAdapter(),
@@ -34,27 +34,27 @@ describe('Dirty tracking integration', () => {
       deviceId: 'dev-1',
     }));
 
-    const tenant = await strata.tenants.create({
+    const tenant = await fyredb.tenants.create({
       name: 'Test',
       meta: { b: 1 },
     });
-    await strata.tenants.open(tenant.id);
+    await fyredb.tenants.open(tenant.id);
 
     // Initially not dirty
-    expect(strata.isDirty).toBe(false);
+    expect(fyredb.isDirty).toBe(false);
 
     // Save makes it dirty
-    const repo = strata.repo(TaskDef) as Repository<Task>;
+    const repo = fyredb.repo(TaskDef) as Repository<Task>;
     repo.save({ title: 'Test', done: false });
-    expect(strata.isDirty).toBe(true);
+    expect(fyredb.isDirty).toBe(true);
 
     // Sync clears dirty
-    await strata.tenants.sync();
-    expect(strata.isDirty).toBe(false);
+    await fyredb.tenants.sync();
+    expect(fyredb.isDirty).toBe(false);
   });
 
   it('isDirty$ observable — emits true on save, false on sync', async () => {
-    const strata = track(new Strata({
+    const fyredb = track(new FyreDb({
       appId: 'test',
       entities: [TaskDef],
       localAdapter: new MemoryStorageAdapter(),
@@ -62,21 +62,21 @@ describe('Dirty tracking integration', () => {
       deviceId: 'dev-1',
     }));
 
-    const tenant = await strata.tenants.create({
+    const tenant = await fyredb.tenants.create({
       name: 'Test',
       meta: { b: 1 },
     });
-    await strata.tenants.open(tenant.id);
+    await fyredb.tenants.open(tenant.id);
 
     const emissions: boolean[] = [];
-    const sub = strata.observe('dirty').subscribe(v => emissions.push(v));
+    const sub = fyredb.observe('dirty').subscribe(v => emissions.push(v));
 
     // Save
-    const repo = strata.repo(TaskDef) as Repository<Task>;
+    const repo = fyredb.repo(TaskDef) as Repository<Task>;
     repo.save({ title: 'Test', done: false });
 
     // Sync
-    await strata.tenants.sync();
+    await fyredb.tenants.sync();
 
     sub.unsubscribe();
 

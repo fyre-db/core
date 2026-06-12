@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { firstValueFrom, take, toArray, skip } from 'rxjs';
 import {
-  Strata,
+  FyreDb,
   defineEntity,
   MemoryStorageAdapter,
 } from '@/index';
@@ -13,22 +13,22 @@ type Task = { title: string; done: boolean; priority: number };
 const TaskDef = defineEntity<Task>('task');
 
 describe('Repository + Reactive integration', () => {
-  let strata: Strata;
+  let fyredb: FyreDb;
 
   afterEach(async () => {
-    if (strata) {
-      await strata.dispose().catch(() => {});
+    if (fyredb) {
+      await fyredb.dispose().catch(() => {});
     }
   });
 
   function setup() {
-    strata = new Strata({
+    fyredb = new FyreDb({
       appId: 'test',
       entities: [TaskDef],
       localAdapter: new MemoryStorageAdapter(),
       deviceId: 'dev-1',
     });
-    return strata.repo(TaskDef) as Repository<Task>;
+    return fyredb.repo(TaskDef) as Repository<Task>;
   }
 
   it('observe(id): emits undefined initially, then entity after save', async () => {
@@ -194,7 +194,7 @@ describe('Repository + Reactive integration', () => {
       complete: () => { completed = true; },
     });
 
-    await strata.dispose();
+    await fyredb.dispose();
     expect(completed).toBe(true);
 
     sub.unsubscribe();
