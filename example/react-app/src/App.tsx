@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Tenant } from 'strata-data-sync';
+import type { Tenant } from '@fyre-db/core';
 import { strata, taskDef } from './strata';
 import type { Task } from './strata';
 import { useQuery } from './hooks';

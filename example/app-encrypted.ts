@@ -1,8 +1,8 @@
 import {
   Strata,
   defineEntity,
-} from 'strata-data-sync';
-import { Pbkdf2EncryptionService, AesGcmEncryptionStrategy, InvalidEncryptionKeyError } from 'strata-adapters';
+} from '@fyre-db/core';
+import { Pbkdf2EncryptionService, AesGcmEncryptionStrategy, InvalidEncryptionKeyError } from '@fyre-db/plugins';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir, printTree } from './common';
 
 type Note = { title: string; body: string };

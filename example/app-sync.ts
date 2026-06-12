@@ -1,5 +1,5 @@
-import { Strata, MemoryStorageAdapter, defineEntity } from 'strata-data-sync';
-import type { SyncEvent } from 'strata-data-sync';
+import { Strata, MemoryStorageAdapter, defineEntity } from '@fyre-db/core';
+import type { SyncEvent } from '@fyre-db/core';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir } from './common';
 
 type Task = { title: string; done: boolean };

@@ -2,7 +2,7 @@
 
 ## Overview
 
-A storage adapter is the bridge between Strata and your persistence layer. You implement the `StorageAdapter` interface — 3 methods, raw bytes in and out.
+A storage adapter is the bridge between fyre-db and your persistence layer. You implement the `StorageAdapter` interface — 3 methods, raw bytes in and out.
 
 ## `StorageAdapter` Interface
 
@@ -45,7 +45,7 @@ const prefix = tenant ? (tenant.meta.bucket as string) : 'app-data';
 ```typescript
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { StorageAdapter, Tenant } from 'strata-data-sync';
+import type { StorageAdapter, Tenant } from '@fyre-db/core';
 
 class FsStorageAdapter implements StorageAdapter {
   constructor(private readonly rootDir: string) {}
@@ -99,9 +99,9 @@ The framework wraps your `StorageAdapter` in an `EncryptedDataAdapter` which han
 
 | Adapter | Package | Storage | Use Case |
 |---------|---------|---------|----------|
-| `MemoryStorageAdapter` | `strata-data-sync` | In-memory `Map` | Testing, development |
-| `LocalStorageAdapter` | `strata-adapters` | Browser `localStorage` | Browser local persistence |
-| `GoogleDriveAdapter` | `strata-adapters` | Google Drive API v3 | Cloud sync |
+| `MemoryStorageAdapter` | `fyre-db/core` | In-memory `Map` | Testing, development |
+| `LocalStorageAdapter` | `fyre-db/plugins` | Browser `localStorage` | Browser local persistence |
+| `GoogleDriveAdapter` | `fyre-db/plugins` | Google Drive API v3 | Cloud sync |
 
 ## Key Naming
 

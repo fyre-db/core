@@ -2,7 +2,7 @@
 
 ## Overview
 
-All data in Strata is scoped to a tenant. A tenant represents a workspace, project, or shared folder. You must create and open a tenant before reading or writing data.
+All data in fyre-db is scoped to a tenant. A tenant represents a workspace, project, or shared folder. You must create and open a tenant before reading or writing data.
 
 ## Creating Tenants
 
@@ -110,7 +110,7 @@ if (!result.exists) {
 Workspace name is stored as a shareable preference at the tenant's location:
 
 ```typescript
-import { saveTenantPrefs, loadTenantPrefs } from 'strata-data-sync';
+import { saveTenantPrefs, loadTenantPrefs } from '@fyre-db/core';
 
 const prefs = await loadTenantPrefs(adapter, tenant);
 console.log(prefs?.name); // 'Shared Project'

@@ -1,6 +1,6 @@
 {
-  "name": "strata-react-example",
-  "version": "1.0.0",
+  "name": "@fyre-db/core-react-example",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "rxjs": "^7.8.2",
-    "strata-data-sync": "file:../.."
+    "@fyre-db/core": "file:../.."
   },
   "devDependencies": {
     "@types/react": "^19.1.2",

@@ -1,5 +1,5 @@
-import { Strata, defineEntity } from 'strata-data-sync';
-import type { BlobMigration } from 'strata-data-sync';
+import { Strata, defineEntity } from '@fyre-db/core';
+import type { BlobMigration } from '@fyre-db/core';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir } from './common';
 
 async function main() {

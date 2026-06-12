@@ -1,5 +1,5 @@
-import { Strata, defineEntity } from 'strata-data-sync';
-import { LocalStorageAdapter } from 'strata-adapters';
+import { Strata, defineEntity } from '@fyre-db/core';
+import { LocalStorageAdapter } from '@fyre-db/plugins';
 
 // ─── Entity Definitions ──────────────────────────────────
 

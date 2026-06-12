@@ -3,7 +3,7 @@
 ## Defining Entities
 
 ```typescript
-import { defineEntity, partitioned } from 'strata-data-sync';
+import { defineEntity, partitioned } from '@fyre-db/core';
 
 type Task = { title: string; done: boolean; category: string };
 const taskDef = defineEntity<Task>('task');

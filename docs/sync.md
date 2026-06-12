@@ -2,7 +2,7 @@
 
 ## Overview
 
-Strata syncs data between three layers: **memory** (in-app), **local** (on-device persistent storage), and **cloud** (remote shared storage). Sync is bidirectional, conflict-free, and works offline.
+fyre-db syncs data between three layers: **memory** (in-app), **local** (on-device persistent storage), and **cloud** (remote shared storage). Sync is bidirectional, conflict-free, and works offline.
 
 ## Enabling Cloud Sync
 

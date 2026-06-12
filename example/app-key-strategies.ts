@@ -1,4 +1,4 @@
-import { Strata, defineEntity, partitioned } from 'strata-data-sync';
+import { Strata, defineEntity, partitioned } from '@fyre-db/core';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir } from './common';
 
 // ─── Entity types ────────────────────────────────────────

@@ -1,14 +1,14 @@
 {
-  "name": "strata-example",
-  "version": "1.0.0",
+  "name": "@fyre-db/core-example",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "tsx"
   },
   "dependencies": {
-    "strata-data-sync": "^0.1.0",
-    "strata-adapters": "^0.1.0",
+    "@fyre-db/core": "^0.0.1",
+    "@fyre-db/plugins": "^0.0.1",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

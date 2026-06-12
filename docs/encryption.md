@@ -2,19 +2,19 @@
 
 ## Overview
 
-Strata supports per-tenant encryption. Each tenant can independently opt in to encryption at creation time. When enabled, all entity data is encrypted at rest using AES-256-GCM with keys derived from a user-provided credential.
+fyre-db supports per-tenant encryption. Each tenant can independently opt in to encryption at creation time. When enabled, all entity data is encrypted at rest using AES-256-GCM with keys derived from a user-provided credential.
 
 ## Setup
 
-Strata defines the `EncryptionService` interface but does not ship concrete implementations. Install `strata-adapters` for the built-in PBKDF2 + AES-GCM implementation:
+fyre-db defines the `EncryptionService` interface but does not ship concrete implementations. Install `fyre-db/plugins` for the built-in PBKDF2 + AES-GCM implementation:
 
 ```bash
-npm install strata-adapters
+npm install @fyre-db/plugins
 ```
 
 ```typescript
-import { Strata, defineEntity } from 'strata-data-sync';
-import { Pbkdf2EncryptionService, AesGcmEncryptionStrategy } from 'strata-adapters';
+import { Strata, defineEntity } from '@fyre-db/core';
+import { Pbkdf2EncryptionService, AesGcmEncryptionStrategy } from '@fyre-db/plugins';
 
 const encryptionService = new Pbkdf2EncryptionService({
   targets: ['cloud'],  // encrypt cloud storage only (or ['local', 'cloud'] for both)
@@ -72,7 +72,7 @@ try {
 | Encrypted tenant, wrong credential | Throws `InvalidEncryptionKeyError` |
 | Unencrypted tenant, no credential | Loads normally |
 
-Import `InvalidEncryptionKeyError` from `strata-data-sync`.
+Import `InvalidEncryptionKeyError` from `fyre-db/core`.
 
 ## Changing Credentials
 
@@ -86,7 +86,7 @@ Requires an active encrypted tenant. The old credential is verified before the c
 
 ## Mixed Tenants
 
-Encrypted and unencrypted tenants coexist on the same Strata instance:
+Encrypted and unencrypted tenants coexist on the same fyre-db instance:
 
 ```typescript
 const secureTenant = await strata.tenants.create({

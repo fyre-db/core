@@ -1,23 +1,23 @@
-# Strata
+# fyre-db
 
-[![CI](https://github.com/abhayjatindoshi/strata-data-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/abhayjatindoshi/strata-data-sync/actions/workflows/ci.yml)
-[![Publish](https://github.com/abhayjatindoshi/strata-data-sync/actions/workflows/publish.yml/badge.svg)](https://github.com/abhayjatindoshi/strata-data-sync/actions/workflows/publish.yml)
-[![codecov](https://codecov.io/gh/abhayjatindoshi/strata-data-sync/branch/main/graph/badge.svg)](https://codecov.io/gh/abhayjatindoshi/strata-data-sync)
+[![CI](https://github.com/fyre-db/core/actions/workflows/ci.yml/badge.svg)](https://github.com/fyre-db/core/actions/workflows/ci.yml)
+[![Publish](https://github.com/fyre-db/core/actions/workflows/publish.yml/badge.svg)](https://github.com/fyre-db/core/actions/workflows/publish.yml)
+[![codecov](https://codecov.io/gh/fyre-db/core/branch/main/graph/badge.svg)](https://codecov.io/gh/fyre-db/core)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-An offline-first, reactive data framework for TypeScript/JavaScript. Strata handles entity storage, multi-device sync via cloud blob storage, HLC-based conflict resolution, multi-tenancy, encryption, and reactive UI bindings.
+An offline-first, reactive data framework for TypeScript/JavaScript. fyre-db handles entity storage, multi-device sync via cloud blob storage, HLC-based conflict resolution, multi-tenancy, encryption, and reactive UI bindings.
 
 ## Install
 
 ```bash
-npm install strata-data-sync
+npm install @fyre-db/core
 ```
 
 ## Quick Start
 
 ```typescript
-import { Strata, MemoryStorageAdapter, defineEntity } from 'strata-data-sync';
+import { Strata, MemoryStorageAdapter, defineEntity } from '@fyre-db/core';
 
 // 1. Define your entities
 type Task = { title: string; done: boolean };

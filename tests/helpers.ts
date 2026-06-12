@@ -7,7 +7,7 @@ import type { DataAdapter } from '@/persistence';
 import { TenantContext } from '@/tenant';
 import { toBase64, fromBase64 } from '@/utils';
 
-// ── Inline crypto helpers (moved from @/utils to strata-adapters) ──
+// ── Inline crypto helpers (moved from @/utils to @fyre-db/plugins) ──
 
 const IV_LENGTH = 12;
 const ENCRYPTION_VERSION = 1;

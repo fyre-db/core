@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Observable } from 'rxjs';
-import type { RepositoryType, SingletonRepositoryType, QueryOptions, BaseEntity } from 'strata-data-sync';
+import type { RepositoryType, SingletonRepositoryType, QueryOptions, BaseEntity } from '@fyre-db/core';
 
 /**
  * Subscribe to an RxJS Observable and return its latest value.

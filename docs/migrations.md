@@ -7,8 +7,8 @@ When your entity schema changes (add a field, rename a field, restructure data),
 ## Defining Migrations
 
 ```typescript
-import { Strata, defineEntity } from 'strata-data-sync';
-import type { BlobMigration } from 'strata-data-sync';
+import { Strata, defineEntity } from '@fyre-db/core';
+import type { BlobMigration } from '@fyre-db/core';
 
 type Task = { title: string; done: boolean; priority: string };
 const taskDef = defineEntity<Task>('task');
@@ -99,7 +99,7 @@ Without `entities`, the migration applies to every blob regardless of type.
 
 ## Validation
 
-Migration versions **must** be contiguous integers starting at 1. Strata validates this at startup and throws if the sequence is broken:
+Migration versions **must** be contiguous integers starting at 1. fyre-db validates this at startup and throws if the sequence is broken:
 
 ```typescript
 // ✅ valid
@@ -137,7 +137,7 @@ Migrations do **not** run eagerly on all blobs at startup. They're applied when 
 The `migrateBlob` function is exported for unit testing:
 
 ```typescript
-import { migrateBlob } from 'strata-data-sync';
+import { migrateBlob } from '@fyre-db/core';
 
 const oldBlob = { task: { 'task._.abc': { title: 'Old' } }, deleted: {} };
 const migrated = migrateBlob(oldBlob, migrations, 'task');

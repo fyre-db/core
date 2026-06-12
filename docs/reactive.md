@@ -2,7 +2,7 @@
 
 ## Overview
 
-Strata uses RxJS Observables to push data changes to your UI. When any entity of a given type changes, observers re-evaluate and emit only if their specific data changed.
+fyre-db uses RxJS Observables to push data changes to your UI. When any entity of a given type changes, observers re-evaluate and emit only if their specific data changed.
 
 ## Observing a Single Entity
 
@@ -108,7 +108,7 @@ function TaskList() {
 }
 ```
 
-For a batteries-included React integration, see `strata-adapters/react` which provides `useRepo`, `useQuery`, `useEntity`, `useSyncStatus`, and more.
+For a batteries-included React integration, see `fyre-db/plugins/react` which provides `useRepo`, `useQuery`, `useEntity`, `useSyncStatus`, and more.
 
 **React Strict Mode** is safe — each mount gets a fresh subscription. Unmounting tears down the subscription, not the EventBus.
 

@@ -4,9 +4,9 @@ import {
   defineEntity,
   saveTenantPrefs,
   NOOP_ENCRYPTION_SERVICE,
-} from 'strata-data-sync';
-import { EncryptedDataAdapter, type DataAdapter } from 'strata-data-sync';
-import { TenantContext } from 'strata-data-sync';
+} from '@fyre-db/core';
+import { EncryptedDataAdapter, type DataAdapter } from '@fyre-db/core';
+import { TenantContext } from '@fyre-db/core';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir } from './common';
 
 // ── Entity ───────────────────────────────────────────────

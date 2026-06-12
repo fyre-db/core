@@ -48,7 +48,7 @@ describe('Multi-tenant parallel sync integration', () => {
     const blob = {
       [entityName]: entities,
       deleted: { [entityName]: tombstones },
-    } as import('@strata/persistence').PartitionBlob;
+    } as import('@/persistence').PartitionBlob;
     const key = partitionBlobKey(entityName, partitionKey);
     await adapter.write(tenant, key, blob);
   }

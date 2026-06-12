@@ -14,7 +14,7 @@ import {
   pbkdf2DeriveKeyWithSalt,
   importAesGcmKey,
   aesGcmDecrypt,
-} from 'strata-data-sync';
+} from '@fyre-db/core';
 
 // ─── Args ────────────────────────────────────────────────
 

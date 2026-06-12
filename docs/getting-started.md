@@ -3,13 +3,13 @@
 ## Installation
 
 ```bash
-npm install strata-data-sync
+npm install @fyre-db/core
 ```
 
 ## Quick Start
 
 ```typescript
-import { Strata, MemoryStorageAdapter, defineEntity } from 'strata-data-sync';
+import { Strata, MemoryStorageAdapter, defineEntity } from '@fyre-db/core';
 
 // 1. Define your entities
 type Task = { title: string; done: boolean };
@@ -89,7 +89,7 @@ const open = repo.query({ where: { done: false } });
 
 Adapters determine where data is stored. The framework ships `MemoryStorageAdapter` for development and testing — it stores raw `Uint8Array` bytes in an in-memory `Map`.
 
-For production, use an adapter from `strata-adapters` (e.g., `LocalStorageAdapter`, `GoogleDriveAdapter`) or implement the `StorageAdapter` interface for your own backend. See [Storage Adapters](storage-adapters.md).
+For production, use an adapter from `fyre-db/plugins` (e.g., `LocalStorageAdapter`, `GoogleDriveAdapter`) or implement the `StorageAdapter` interface for your own backend. See [Storage Adapters](storage-adapters.md).
 
 ## StrataConfig
 

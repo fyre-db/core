@@ -1,4 +1,4 @@
-import { Strata, defineEntity } from 'strata-data-sync';
+import { Strata, defineEntity } from '@fyre-db/core';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir } from './common';
 
 // ─── Define a Task entity ────────────────────────────────
