@@ -3,13 +3,15 @@
 ## Defining Entities
 
 ```typescript
-import { defineEntity, partitioned } from 'strata-data-sync';
+import { defineEntity, partitioned } from '@fyre-db/core';
 
 type Task = { title: string; done: boolean; category: string };
 const taskDef = defineEntity<Task>('task');
 ```
 
 The framework adds `BaseEntity` fields to every entity: `id`, `createdAt`, `updatedAt`, `version`, `device`, `hlc`.
+
+Entity names must not contain dots.
 
 ## Key Strategies
 
@@ -49,7 +51,7 @@ const settingsDef = defineEntity<Settings>('settings', {
 Returns a `SingletonRepository` instead of a `Repository`:
 
 ```typescript
-const settings = strata.repo(settingsDef);
+const settings = fyredb.repo(settingsDef);
 settings.save({ theme: 'dark', language: 'en' });
 const current = settings.get(); // no ID parameter
 settings.delete();
@@ -59,7 +61,7 @@ settings.delete();
 
 Format: `entityName.partitionKey.uniqueId`
 
-IDs are auto-generated (8-char alphanumeric). To derive deterministic IDs from entity data:
+IDs are auto-generated (8-char URL-safe alphanumeric). To derive deterministic IDs from entity data:
 
 ```typescript
 const authDef = defineEntity<Auth>('auth', {
@@ -68,17 +70,17 @@ const authDef = defineEntity<Auth>('auth', {
 });
 ```
 
-With `deriveId`, calling `save()` with the same derived ID updates the existing entity (implicit upsert).
+With `deriveId`, calling `save()` with the same derived ID updates the existing entity (implicit upsert). The `deriveId` output must not contain dots. Entity IDs are capped at 256 characters.
 
 ## Repository API
 
 ### `Repository<T>` — for global and partitioned entities
 
 ```typescript
-const repo = strata.repo(taskDef);
+const repo = fyredb.repo(taskDef);
 
 // Create / Update
-const id = repo.save({ title: 'New task', done: false });
+const id = repo.save({ title: 'New task', done: false, category: 'work' });
 repo.save({ ...repo.get(id)!, done: true }); // update by passing id
 
 // Read
@@ -98,8 +100,8 @@ repo.delete(id);
 
 // Batch
 const ids = repo.saveMany([
-  { title: 'Task A', done: false },
-  { title: 'Task B', done: false },
+  { title: 'Task A', done: false, category: 'work' },
+  { title: 'Task B', done: false, category: 'home' },
 ]);
 repo.deleteMany(ids);
 ```
@@ -107,7 +109,7 @@ repo.deleteMany(ids);
 ### `SingletonRepository<T>` — for singleton entities
 
 ```typescript
-const settings = strata.repo(settingsDef);
+const settings = fyredb.repo(settingsDef);
 
 settings.save({ theme: 'dark', language: 'en' });
 const current = settings.get();
@@ -136,12 +138,12 @@ Execution order: `where` → `range` → `orderBy` → `offset`/`limit`. All in-
 
 ## Batch Operations
 
-`saveMany()` and `deleteMany()` perform all writes then emit a single change signal — efficient for bulk operations:
+`saveMany()` and `deleteMany()` perform all writes then emit a single change event — efficient for bulk operations:
 
 ```typescript
-// 100 saves → 1 signal → observers re-scan once
-const ids = repo.saveMany(items.map(i => ({ title: i, done: false })));
+// 100 saves → 1 event → observers re-scan once
+const ids = repo.saveMany(items.map(i => ({ title: i, done: false, category: 'bulk' })));
 
-// deleteMany only signals if at least one entity was deleted
+// deleteMany only emits if at least one entity was deleted
 repo.deleteMany(ids);
 ```

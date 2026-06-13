@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ReactiveFlag } from '@strata/utils';
+import { ReactiveFlag } from '@/utils';
 
 describe('ReactiveFlag', () => {
   it('starts with initial value false', () => {

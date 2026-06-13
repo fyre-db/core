@@ -4,7 +4,7 @@ import {
   MemoryStorageAdapter,
   defineEntity,
   EventBus,
-} from '@strata/index';
+} from '@/index';
 
 describe('index barrel exports', () => {
   it('exports HLC module', () => {

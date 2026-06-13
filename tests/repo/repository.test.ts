@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Store } from '@strata/store';
+import { Store } from '@/store';
 import { DEFAULT_OPTIONS } from '../helpers';
-import { EventBus } from '@strata/reactive';
-import type { EntityEvent } from '@strata/reactive';
-import { defineEntity, partitioned } from '@strata/schema';
-import { Repository } from '@strata/repo';
-import type { Hlc } from '@strata/hlc';
+import { EventBus } from '@/reactive';
+import type { EntityEvent } from '@/reactive';
+import { defineEntity, partitioned } from '@/schema';
+import { Repository } from '@/repo';
+import type { Hlc } from '@/hlc';
 
 type Item = { name: string; category: string; price: number };
 
@@ -307,6 +307,90 @@ describe('Repository', () => {
       expect(results).toHaveLength(1);
       expect(results[0].name).toBe('C');
       vi.restoreAllMocks();
+    });
+
+    it('restricts query to the requested partition keys', () => {
+      vi.spyOn(Date, 'now').mockReturnValue(1000);
+      const store = new Store(DEFAULT_OPTIONS);
+      const repo = new Repository(PartitionedDef, store, makeHlcRef(), new EventBus<EntityEvent>());
+      repo.save({ name: 'Wrench', category: 'tools', price: 15 });
+      repo.save({ name: 'Doll', category: 'toys', price: 10 });
+      repo.save({ name: 'Ball', category: 'sports', price: 5 });
+
+      // Only the explicitly named partition keys are scanned.
+      const results = repo.query({ keys: ['tools', 'toys'] });
+
+      expect(results.map(r => r.name).sort()).toEqual(['Doll', 'Wrench']);
+      vi.restoreAllMocks();
+    });
+
+    it('triggers partition hydration for each requested key before querying', () => {
+      vi.spyOn(Date, 'now').mockReturnValue(1000);
+      const store = new Store(DEFAULT_OPTIONS);
+      const ensurePartition = vi.fn().mockResolvedValue(undefined);
+      const repo = new Repository(
+        PartitionedDef, store, makeHlcRef(), new EventBus<EntityEvent>(), ensurePartition,
+      );
+      repo.save({ name: 'Wrench', category: 'tools', price: 15 });
+      repo.save({ name: 'Doll', category: 'toys', price: 10 });
+
+      const results = repo.query({ keys: ['tools', 'toys'] });
+
+      expect(results).toHaveLength(2);
+      expect(ensurePartition).toHaveBeenCalledWith('product', 'tools');
+      expect(ensurePartition).toHaveBeenCalledWith('product', 'toys');
+      vi.restoreAllMocks();
+    });
+  });
+
+  describe('partition hydration', () => {
+    it('observe() hydrates the partition for a parseable entity id', () => {
+      const store = new Store(DEFAULT_OPTIONS);
+      const ensurePartition = vi.fn().mockResolvedValue(undefined);
+      const repo = new Repository(
+        ItemDef, store, makeHlcRef(), new EventBus<EntityEvent>(), ensurePartition,
+      );
+
+      repo.observe('item._.abc12345');
+
+      expect(ensurePartition).toHaveBeenCalledWith('item', '_');
+    });
+
+    it('observe() skips hydration when the id has no parseable partition key', () => {
+      const store = new Store(DEFAULT_OPTIONS);
+      const ensurePartition = vi.fn().mockResolvedValue(undefined);
+      const repo = new Repository(
+        ItemDef, store, makeHlcRef(), new EventBus<EntityEvent>(), ensurePartition,
+      );
+
+      // 'nodot' has no '.' — parseEntityKey yields '' which is not a composite key
+      repo.observe('nodot');
+
+      expect(ensurePartition).not.toHaveBeenCalled();
+    });
+
+    it('query() without keys hydrates the default partition for a global entity', () => {
+      const store = new Store(DEFAULT_OPTIONS);
+      const ensurePartition = vi.fn().mockResolvedValue(undefined);
+      const repo = new Repository(
+        ItemDef, store, makeHlcRef(), new EventBus<EntityEvent>(), ensurePartition,
+      );
+
+      repo.query();
+
+      expect(ensurePartition).toHaveBeenCalledWith('item', '_');
+    });
+
+    it('query() without keys does not eagerly hydrate a partitioned entity', () => {
+      const store = new Store(DEFAULT_OPTIONS);
+      const ensurePartition = vi.fn().mockResolvedValue(undefined);
+      const repo = new Repository(
+        PartitionedDef, store, makeHlcRef(), new EventBus<EntityEvent>(), ensurePartition,
+      );
+
+      repo.query();
+
+      expect(ensurePartition).not.toHaveBeenCalled();
     });
   });
 });

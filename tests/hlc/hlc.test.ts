@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createHlc, tick, compareHlc } from '@strata/hlc';
+import { createHlc, tick, compareHlc } from '@/hlc';
 
 describe('HLC', () => {
   describe('createHlc', () => {

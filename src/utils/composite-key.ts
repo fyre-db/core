@@ -1,4 +1,4 @@
-import type { Tenant } from '@strata/adapter';
+import type { Tenant } from '@/adapter';
 
 export function compositeKey(tenant: Tenant | undefined, key: string): string {
   return tenant ? `${tenant.id}:${key}` : key;

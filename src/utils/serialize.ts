@@ -33,6 +33,7 @@ export function serialize(data: unknown): Uint8Array {
 // serialize() on both sides of the sync boundary, so the shape is framework-
 // controlled. Adapters that introduce untrusted data should validate at the
 // adapter boundary instead.
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
 export function deserialize<T>(bytes: Uint8Array): T {
   const json = decoder.decode(bytes);
   return JSON.parse(json, reviver) as T;

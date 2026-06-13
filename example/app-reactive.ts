@@ -1,4 +1,4 @@
-import { Strata, defineEntity } from 'strata-data-sync';
+import { FyreDb, defineEntity } from '@fyre-db/core';
 import { Subscription } from 'rxjs';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir } from './common';
 
@@ -14,17 +14,17 @@ async function main() {
 
   const storage = new FsStorageAdapter(dataDir);
 
-  const strata = new Strata({
+  const fyredb = new FyreDb({
     appId: 'reactive-demo',
     entities: [TaskDef],
     localAdapter: storage,
     deviceId: 'device-1',
   });
 
-  const tenant = await strata.tenants.create({ name: 'Demo', meta: {} });
-  await strata.tenants.open(tenant.id);
+  const tenant = await fyredb.tenants.create({ name: 'Demo', meta: {} });
+  await fyredb.tenants.open(tenant.id);
 
-  const repo = strata.repo(TaskDef);
+  const repo = fyredb.repo(TaskDef);
   const subs: Subscription[] = [];
 
   // ── 1. observe(id) ────────────────────────────────────
@@ -44,9 +44,9 @@ async function main() {
   );
 
   await delay(50);
-  repo.save({ title: 'Write docs (updated)', done: false, id } as Task & { id: string });
+  repo.save({ title: 'Write docs (updated)', done: false, id });
   await delay(50);
-  repo.save({ title: 'Write docs (updated)', done: true, id } as Task & { id: string });
+  repo.save({ title: 'Write docs (updated)', done: true, id });
   await delay(50);
   repo.delete(id);
   await delay(50);
@@ -72,7 +72,7 @@ async function main() {
   await delay(50);
 
   // Mark Task A as done — open count drops from 2 → 1
-  repo.save({ title: 'Task A', done: true, id: a } as Task & { id: string });
+  repo.save({ title: 'Task A', done: true, id: a });
   await delay(50);
 
   repo.delete(b);
@@ -108,7 +108,7 @@ async function main() {
 
   // ── Cleanup ───────────────────────────────────────────
   for (const sub of subs) sub.unsubscribe();
-  await strata.dispose();
+  await fyredb.dispose();
 
   console.log('\nDone.');
 }

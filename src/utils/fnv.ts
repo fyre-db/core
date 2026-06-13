@@ -13,3 +13,14 @@ export function fnv1aAppend(hash: number, input: string): number {
   }
   return h;
 }
+
+const BASE64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+export function fnvHash(input: string): string {
+  const h = fnv1a(input);
+  let out = '';
+  for (let i = 0; i < 6; i++) {
+    out += BASE64URL[(h >>> (i * 5)) & 0x1f];
+  }
+  return out;
+}

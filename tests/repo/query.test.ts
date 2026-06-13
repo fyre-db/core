@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyOrderBy, applyRange, applyPagination } from '@strata/repo';
+import { applyOrderBy, applyRange, applyPagination } from '@/repo';
 
 describe('applyOrderBy — Date, string, and equal values', () => {
   it('sorts by Date fields ascending', () => {

@@ -7,8 +7,8 @@ When your entity schema changes (add a field, rename a field, restructure data),
 ## Defining Migrations
 
 ```typescript
-import { Strata, defineEntity } from 'strata-data-sync';
-import type { BlobMigration } from 'strata-data-sync';
+import { FyreDb, defineEntity } from '@fyre-db/core';
+import type { BlobMigration } from '@fyre-db/core';
 
 type Task = { title: string; done: boolean; priority: string };
 const taskDef = defineEntity<Task>('task');
@@ -29,7 +29,7 @@ const migrations: BlobMigration[] = [
   },
 ];
 
-const strata = new Strata({
+const fyredb = new FyreDb({
   appId: 'my-app',
   entities: [taskDef],
   localAdapter: storage,
@@ -48,7 +48,7 @@ type BlobMigration = {
 };
 ```
 
-- **`version`** — contiguous integer starting at 1 (i.e. 1, 2, 3, …). Gaps and duplicates are rejected at startup. Migrations with `version > blob.__v` are applied.
+- **`version`** — contiguous integer starting at 1 (1, 2, 3, …). No gaps, no duplicates — validated at startup.
 - **`entities`** — optional. If provided, only blobs matching these entity types are migrated. If omitted, the migration applies to all blobs.
 - **`migrate`** — receives the raw `PartitionBlob`, returns the transformed blob.
 
@@ -70,7 +70,6 @@ When a blob is read during sync:
 3. Sort by version ascending
 4. Apply each migration in order
 5. Set `__v` to the highest applied version
-6. Write migrated blob back to the adapter
 
 ## Entity Scoping
 
@@ -81,44 +80,48 @@ const migrations: BlobMigration[] = [
   {
     version: 1,
     entities: [taskDef],  // only task blobs
-    migrate: (blob) => { /* transform task data */ },
+    migrate: (blob) => { /* transform task data */ return blob; },
   },
   {
     version: 2,
     entities: [noteDef],  // only note blobs
-    migrate: (blob) => { /* transform note data */ },
+    migrate: (blob) => { /* transform note data */ return blob; },
   },
   {
     version: 3,
-    // no entities — applies to ALL blobs
-    migrate: (blob) => { /* global transform */ },
+    // no entities filter — applies to ALL blobs
+    migrate: (blob) => { /* global transform */ return blob; },
   },
 ];
 ```
 
 Without `entities`, the migration applies to every blob regardless of type.
 
-## Sequential Migrations
+## Validation
 
-Migration versions **must** be contiguous integers starting at 1 — no gaps, no duplicates. Strata validates this at startup and throws if the sequence is broken:
+Migration versions **must** be contiguous integers starting at 1. fyre-db validates this at startup and throws if the sequence is broken:
 
 ```typescript
 // ✅ valid
-const migrations: BlobMigration[] = [
-  { version: 1, migrate: (b) => { /* v0→v1 */ return b; } },
-  { version: 2, migrate: (b) => { /* v1→v2 */ return b; } },
-  { version: 3, migrate: (b) => { /* v2→v3 */ return b; } },
+const migrations = [
+  { version: 1, migrate: (b) => b },
+  { version: 2, migrate: (b) => b },
+  { version: 3, migrate: (b) => b },
 ];
 
 // ❌ throws — gap between 2 and 5
-const bad: BlobMigration[] = [
+const bad = [
   { version: 1, migrate: (b) => b },
   { version: 2, migrate: (b) => b },
-  { version: 5, migrate: (b) => b },
+  { version: 5, migrate: (b) => b },  // Error: expected 3, got 5
+];
+
+// ❌ throws — duplicate version
+const dup = [
+  { version: 1, migrate: (b) => b },
+  { version: 1, migrate: (b) => b },  // Error: Duplicate version 1
 ];
 ```
-
-A blob already at version 2 will only have migration 3 applied.
 
 ## Lazy Execution
 
@@ -129,9 +132,20 @@ Migrations do **not** run eagerly on all blobs at startup. They're applied when 
 - Cost is amortized — each blob migrated once on first access
 - No full-scan migration pass needed
 
+## Testing
+
+The `migrateBlob` function is exported for unit testing:
+
+```typescript
+import { migrateBlob } from '@fyre-db/core';
+
+const oldBlob = { task: { 'task._.abc': { title: 'Old' } }, deleted: {} };
+const migrated = migrateBlob(oldBlob, migrations, 'task');
+// migrated.task['task._.abc'].priority === 'medium'
+```
+
 ## Tips
 
-- **Always add new migrations, never modify old ones** — existing blobs may have already been migrated with the old version
-- **Test migrations** — the `migrateBlob(blob, migrations)` function is exported for unit testing
+- **Always add new migrations, never modify old ones** — existing blobs may have already been migrated
 - **Keep migrations simple** — add defaults for new fields, reshape data structures
-- **Version numbers must be unique and increasing** — gaps are OK (1, 3, 5)
+- **Test migrations** — use `migrateBlob()` in unit tests with sample blobs

@@ -1,4 +1,4 @@
-import { compareValues, valuesEqual } from '@strata/utils';
+import { compareValues, valuesEqual } from '@/utils';
 
 export function applyWhere<T>(
   entities: ReadonlyArray<T>,

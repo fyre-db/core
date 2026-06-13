@@ -15,9 +15,9 @@ export function compareValues(a: unknown, b: unknown): number {
 
   if (a === undefined || a === null) return 0;
   if (typeof a === 'boolean') return (a === b) ? 0 : a ? 1 : -1;
-  if (typeof a === 'number') return (a as number) - (b as number);
+  if (typeof a === 'number') return (a) - (b as number);
   if (typeof a === 'string') return a < (b as string) ? -1 : a > (b as string) ? 1 : 0;
-  if (a instanceof Date) return (a as Date).getTime() - (b as Date).getTime();
+  if (a instanceof Date) return (a).getTime() - (b as Date).getTime();
   return 0;
 }
 

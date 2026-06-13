@@ -1,13 +1,11 @@
-import debug from 'debug';
-import type { Tenant } from '@strata/adapter';
-import { partitionBlobKey } from '@strata/adapter';
-import type { DataAdapter, PartitionBlob } from '@strata/persistence';
-import type { BlobMigration } from '@strata/schema/migration';
-import { migrateBlob } from '@strata/schema/migration';
-import type { Hlc } from '@strata/hlc';
+import type { Tenant } from '@/adapter';
+import { partitionBlobKey } from '@/adapter';
+import type { DataAdapter, PartitionBlob } from '@/persistence';
+import type { BlobMigration } from '@/schema/migration';
+import { migrateBlob } from '@/schema/migration';
+import type { Hlc } from '@/hlc';
 import type { EntityStore } from './types';
-
-const log = debug('strata:store');
+import { log } from '@/log';
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -29,6 +27,7 @@ function validateBlob(blob: PartitionBlob, entityName: string): boolean {
   if (entityData !== undefined && !isPlainObject(entityData)) return false;
 
   const tombstoneData = blob.deleted[entityName];
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (tombstoneData !== undefined) {
     if (!isPlainObject(tombstoneData)) return false;
     for (const hlc of Object.values(tombstoneData)) {
@@ -56,7 +55,7 @@ export async function loadPartitionFromAdapter(
   }
 
   if (!validateBlob(blob, entityName)) {
-    log('malformed blob for partition %s — skipping', key);
+    log.store.warn('malformed blob for partition %s — skipping', key);
     return new Map();
   }
 
@@ -65,7 +64,7 @@ export async function loadPartitionFromAdapter(
   const tombstoneData = blob.deleted[entityName] ?? {};
 
   for (const [id, hlc] of Object.entries(tombstoneData)) {
-    store.setTombstone(key, id, hlc as Hlc);
+    store.setTombstone(key, id, hlc);
   }
 
   return new Map(Object.entries(entities));

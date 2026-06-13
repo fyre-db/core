@@ -1,4 +1,4 @@
-import type { Hlc } from '@strata/hlc';
+import type { Hlc } from '@/hlc';
 
 export type PartitionIndexEntry = {
   readonly hash: number;

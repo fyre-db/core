@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { createDataAdapter } from '../helpers';
-import { Store } from '@strata/store';
+import { Store } from '@/store';
 import { DEFAULT_OPTIONS } from '../helpers';
-import { loadPartitionFromAdapter } from '@strata/store/flush';
-import type { Hlc } from '@strata/hlc';
+import { loadPartitionFromAdapter } from '@/store/flush';
+import type { Hlc } from '@/hlc';
 
 describe('loadPartitionFromAdapter', () => {
   it('loads entities from blob into map', async () => {

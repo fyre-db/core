@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MemoryStorageAdapter } from '@strata/adapter';
+import { MemoryStorageAdapter } from '@/adapter';
 
 describe('MemoryStorageAdapter', () => {
   it('read returns null for missing key', async () => {

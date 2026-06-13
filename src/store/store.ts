@@ -1,9 +1,9 @@
-import type { Hlc } from '@strata/hlc';
-import type { Tenant } from '@strata/adapter';
-import type { PartitionBlob } from '@strata/persistence';
-import { partitionHash } from '@strata/persistence';
-import { parseCompositeKey } from '@strata/utils';
-import type { ResolvedStrataOptions } from '../options';
+import type { Hlc } from '@/hlc';
+import type { Tenant } from '@/adapter';
+import type { PartitionBlob } from '@/persistence';
+import { partitionHash } from '@/persistence';
+import { parseCompositeKey } from '@/utils';
+import type { ResolvedFyreDbOptions } from '../options';
 import type { EntityStore } from './types';
 
 export class Store implements EntityStore {
@@ -15,13 +15,13 @@ export class Store implements EntityStore {
   private readonly systemEntityKey: string;
   private cachedMarkerBlob: PartitionBlob | null = null;
 
-  constructor(options: ResolvedStrataOptions) {
+  constructor(options: ResolvedFyreDbOptions) {
     this.markerKey = options.markerKey;
     this.tombstoneRetentionMs = options.tombstoneRetentionMs;
     this.systemEntityKey = options.systemEntityKey;
   }
 
-  getEntity(entityKey: string, id: string): unknown | undefined {
+  getEntity(entityKey: string, id: string): unknown {
     return this.partitions.get(entityKey)?.get(id);
   }
 
@@ -46,6 +46,10 @@ export class Store implements EntityStore {
       this.cachedMarkerBlob = null;
     }
     return deleted;
+  }
+
+  hasPartition(entityKey: string): boolean {
+    return this.partitions.has(entityKey);
   }
 
   getPartition(entityKey: string): ReadonlyMap<string, unknown> {
@@ -76,11 +80,12 @@ export class Store implements EntityStore {
     entityKey: string,
     loader: () => Promise<Map<string, unknown>>,
   ): Promise<ReadonlyMap<string, unknown>> {
-    if (!this.partitions.has(entityKey)) {
-      const data = await loader();
-      this.partitions.set(entityKey, data);
+    let partition = this.partitions.get(entityKey);
+    if (!partition) {
+      partition = await loader();
+      this.partitions.set(entityKey, partition);
     }
-    return this.partitions.get(entityKey)!;
+    return partition;
   }
 
   setTombstone(entityKey: string, entityId: string, hlc: Hlc): void {
@@ -107,19 +112,19 @@ export class Store implements EntityStore {
 
   // ─── StorageAdapter interface ─────────────────────────────
 
-  async read(_tenant: Tenant | undefined, key: string): Promise<PartitionBlob | null> {
+  read(_tenant: Tenant | undefined, key: string): Promise<PartitionBlob | null> {
     if (key === this.markerKey) {
       if (!this.cachedMarkerBlob) {
         this.cachedMarkerBlob = this.buildMarkerBlob();
       }
-      return this.cachedMarkerBlob;
+      return Promise.resolve(this.cachedMarkerBlob);
     }
     const parsed = parseCompositeKey(key);
-    if (!parsed) return null;
+    if (!parsed) return Promise.resolve(null);
     const entityName = parsed.entityName;
     const partition = this.getPartition(key);
     if (partition.size === 0 && this.getTombstones(key).size === 0) {
-      return null;
+      return Promise.resolve(null);
     }
     const entities: Record<string, unknown> = {};
     for (const [id, entity] of partition) {
@@ -132,22 +137,22 @@ export class Store implements EntityStore {
         tombstoneEntries[id] = hlc;
       }
     }
-    return {
+    return Promise.resolve({
       [entityName]: entities,
       deleted: { [entityName]: tombstoneEntries },
-    };
+    });
   }
 
   // write() intentionally does not mark dirty — it's used by sync to import
   // remote data into memory. Only user mutations via setEntity/deleteEntity
   // should trigger dirty tracking and subsequent sync cycles.
-  async write(_tenant: Tenant | undefined, key: string, data: PartitionBlob): Promise<void> {
+  write(_tenant: Tenant | undefined, key: string, data: PartitionBlob): Promise<void> {
     if (key === this.markerKey) {
-      return; // marker is always computed from live state
+      return Promise.resolve(); // marker is always computed from live state
     }
     this.cachedMarkerBlob = null;
     const parsed = parseCompositeKey(key);
-    if (!parsed) return;
+    if (!parsed) return Promise.resolve();
     const entityName = parsed.entityName;
     const entities =
       (data[entityName] as Record<string, unknown> | undefined) ?? {};
@@ -165,13 +170,14 @@ export class Store implements EntityStore {
       tombstoneMap.set(id, hlc);
     }
     this.tombstones.set(key, tombstoneMap);
+    return Promise.resolve();
   }
 
-  async delete(_tenant: Tenant | undefined, key: string): Promise<boolean> {
+  delete(_tenant: Tenant | undefined, key: string): Promise<boolean> {
     const had = this.partitions.has(key) || this.tombstones.has(key);
     this.partitions.delete(key);
     this.tombstones.delete(key);
-    return had;
+    return Promise.resolve(had);
   }
 
   private buildMarkerBlob(): PartitionBlob {
@@ -182,6 +188,7 @@ export class Store implements EntityStore {
       const entityName = parsed.entityName;
       const partitionKey = parsed.rest;
 
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!indexes[entityName]) indexes[entityName] = {};
 
       const partition = this.getPartition(entityKey);

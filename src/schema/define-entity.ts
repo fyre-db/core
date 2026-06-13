@@ -1,5 +1,6 @@
 import type { EntityDefinition, EntityDefinitionOptions, KeyStrategy } from './types';
 import { globalStrategy, singletonStrategy } from './key-strategy';
+import { FyreDbConfigError } from '@/errors';
 
 export function defineEntity<T>(
   name: string,
@@ -14,7 +15,7 @@ export function defineEntity<T>(
   options?: EntityDefinitionOptions<T>,
 ): EntityDefinition<T> {
   if (name.includes('.')) {
-    throw new Error(`Entity name "${name}" must not contain dots`);
+    throw new FyreDbConfigError(`Entity name "${name}" must not contain dots`);
   }
   const keyStrategyOption = options?.keyStrategy ?? 'global';
   let keyStrategy: KeyStrategy<T>;
@@ -36,7 +37,7 @@ function wrapDeriveId<T>(fn: (entity: T) => string): (entity: T) => string {
   return (entity: T) => {
     const id = fn(entity);
     if (id.includes('.')) {
-      throw new Error('deriveId output must not contain dots');
+      throw new FyreDbConfigError('deriveId output must not contain dots');
     }
     return id;
   };

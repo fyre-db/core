@@ -2,7 +2,7 @@ import { wrapAdapter } from '../helpers';
 import { describe, it, expect, afterEach } from 'vitest';
 import { firstValueFrom, filter, timeout } from 'rxjs';
 import {
-  Strata,
+  FyreDb,
   defineEntity,
   MemoryStorageAdapter,
   partitionBlobKey,
@@ -10,10 +10,10 @@ import {
   updatePartitionIndexEntry,
   loadAllIndexes,
   resolveOptions,
-} from '@strata/index';
-import type { SyncEvent, Tenant } from '@strata/index';
-import type { DataAdapter } from '@strata/persistence';
-import type { Repository } from '@strata/repo';
+} from '@/index';
+import type { SyncEvent, Tenant } from '@/index';
+import type { DataAdapter } from '@/persistence';
+import type { Repository } from '@/repo';
 
 type Note = { title: string; body: string; priority: number };
 type Project = { name: string; active: boolean };
@@ -22,7 +22,7 @@ const NoteDef = defineEntity<Note>('note');
 const ProjectDef = defineEntity<Project>('project');
 
 describe('Multi-tenant parallel sync integration', () => {
-  const instances: Strata[] = [];
+  const instances: FyreDb[] = [];
 
   afterEach(async () => {
     for (const s of instances) {
@@ -31,7 +31,7 @@ describe('Multi-tenant parallel sync integration', () => {
     instances.length = 0;
   });
 
-  function track(s: Strata): Strata {
+  function track(s: FyreDb): FyreDb {
     instances.push(s);
     return s;
   }
@@ -48,12 +48,12 @@ describe('Multi-tenant parallel sync integration', () => {
     const blob = {
       [entityName]: entities,
       deleted: { [entityName]: tombstones },
-    } as import('@strata/persistence').PartitionBlob;
+    } as import('@/persistence').PartitionBlob;
     const key = partitionBlobKey(entityName, partitionKey);
     await adapter.write(tenant, key, blob);
   }
 
-  /** Write an external partition + update the __strata index so sync can discover it. */
+  /** Write an external partition + update the __fyredb index so sync can discover it. */
   async function seedExternal(
     adapter: DataAdapter,
     tenant: Tenant | undefined,
@@ -78,7 +78,7 @@ describe('Multi-tenant parallel sync integration', () => {
     const localAdapter = new MemoryStorageAdapter();
 
     // Tenant A uses cloudA
-    const strataA = track(new Strata({
+    const fyredbA = track(new FyreDb({
       appId: 'test',
       entities: [NoteDef, ProjectDef],
       localAdapter,
@@ -86,21 +86,21 @@ describe('Multi-tenant parallel sync integration', () => {
       deviceId: 'dev-1',
     }));
 
-    const tenantA = await strataA.tenants.create({
+    const tenantA = await fyredbA.tenants.create({
       name: 'Workspace A',
       meta: { folder: 'ws-a' },
     });
-    await strataA.tenants.open(tenantA.id);
+    await fyredbA.tenants.open(tenantA.id);
 
-    const noteRepoA = strataA.repo(NoteDef) as Repository<Note>;
+    const noteRepoA = fyredbA.repo(NoteDef) as Repository<Note>;
     const idA1 = noteRepoA.save({ title: 'Note in A', body: 'body-a', priority: 1 });
     const idA2 = noteRepoA.save({ title: 'Another A', body: 'body-a2', priority: 2 });
-    await strataA.tenants.sync();
-    await strataA.dispose();
+    await fyredbA.tenants.sync();
+    await fyredbA.dispose();
     instances.length = 0;
 
     // Tenant B uses cloudB (a completely separate cloud store)
-    const strataB = track(new Strata({
+    const fyredbB = track(new FyreDb({
       appId: 'test',
       entities: [NoteDef, ProjectDef],
       localAdapter,
@@ -108,26 +108,26 @@ describe('Multi-tenant parallel sync integration', () => {
       deviceId: 'dev-1',
     }));
 
-    const tenantB = await strataB.tenants.create({
+    const tenantB = await fyredbB.tenants.create({
       name: 'Workspace B',
       meta: { folder: 'ws-b' },
     });
-    await strataB.tenants.open(tenantB.id);
+    await fyredbB.tenants.open(tenantB.id);
 
-    const noteRepoB = strataB.repo(NoteDef) as Repository<Note>;
+    const noteRepoB = fyredbB.repo(NoteDef) as Repository<Note>;
     const idB1 = noteRepoB.save({ title: 'Note in B', body: 'body-b', priority: 10 });
-    await strataB.tenants.sync();
+    await fyredbB.tenants.sync();
 
     // A's data must not exist in B's cloud or store
     expect(noteRepoB.get(idA1)).toBeUndefined();
     expect(noteRepoB.get(idA2)).toBeUndefined();
     expect(noteRepoB.query()).toHaveLength(1);
     expect(noteRepoB.get(idB1)!.title).toBe('Note in B');
-    await strataB.dispose();
+    await fyredbB.dispose();
     instances.length = 0;
 
     // Re-load tenant A from its cloud — B's data must not appear
-    const strataA2 = track(new Strata({
+    const fyredbA2 = track(new FyreDb({
       appId: 'test',
       entities: [NoteDef, ProjectDef],
       localAdapter,
@@ -135,16 +135,17 @@ describe('Multi-tenant parallel sync integration', () => {
       deviceId: 'dev-1',
     }));
     // Re-create tenant entry so we can load it
-    await strataA2.tenants.create({
+    await fyredbA2.tenants.create({
       name: 'Workspace A',
       meta: { folder: 'ws-a' },
       id: tenantA.id,
     });
-    await strataA2.tenants.open(tenantA.id);
+    await fyredbA2.tenants.open(tenantA.id);
 
-    const noteRepoA2 = strataA2.repo(NoteDef) as Repository<Note>;
+    const noteRepoA2 = fyredbA2.repo(NoteDef) as Repository<Note>;
+    const dataA2 = await firstValueFrom(noteRepoA2.observeQuery().pipe(filter(arr => arr.length > 0)));
     expect(noteRepoA2.get(idB1)).toBeUndefined();
-    expect(noteRepoA2.query()).toHaveLength(2);
+    expect(dataA2).toHaveLength(2);
     expect(noteRepoA2.get(idA1)!.title).toBe('Note in A');
   });
 
@@ -153,20 +154,20 @@ describe('Multi-tenant parallel sync integration', () => {
     const localAdapter = new MemoryStorageAdapter();
     const meta = { folder: 'shared' };
 
-    const strata = track(new Strata({
+    const fyredb = track(new FyreDb({
       appId: 'test',
       entities: [NoteDef],
       localAdapter,
       cloudAdapter: sharedCloud,
       deviceId: 'dev-1',
     }));
-    const tenant = await strata.tenants.create({ name: 'Shared', meta });
-    await strata.tenants.open(tenant.id);
+    const tenant = await fyredb.tenants.create({ name: 'Shared', meta });
+    await fyredb.tenants.open(tenant.id);
 
     // Device 1 saves a note
-    const noteRepo = strata.repo(NoteDef) as Repository<Note>;
+    const noteRepo = fyredb.repo(NoteDef) as Repository<Note>;
     noteRepo.save({ title: 'Local note', body: 'from dev-1', priority: 1 });
-    await strata.tenants.sync();
+    await fyredb.tenants.sync();
 
     // ---- Simulate an external device writing directly to cloud ----
     const externalNote = {
@@ -184,8 +185,8 @@ describe('Multi-tenant parallel sync integration', () => {
       'note._.ext001': externalNote,
     });
 
-    // Sync again — strata should pick up the external note
-    await strata.tenants.sync();
+    // Sync again — fyredb should pick up the external note
+    await fyredb.tenants.sync();
 
     const found = noteRepo.get('note._.ext001');
     expect(found).toBeDefined();
@@ -205,46 +206,47 @@ describe('Multi-tenant parallel sync integration', () => {
     const meta = { folder: 'shared' };
 
     // Device A: create tenant and write initial data
-    const strataA = track(new Strata({
+    const fyredbA = track(new FyreDb({
       appId: 'test',
       entities: [NoteDef],
       localAdapter: localA,
       cloudAdapter: sharedCloud,
       deviceId: 'device-A',
     }));
-    const tenant = await strataA.tenants.create({ name: 'Shared', meta });
-    await strataA.tenants.open(tenant.id);
+    const tenant = await fyredbA.tenants.create({ name: 'Shared', meta });
+    await fyredbA.tenants.open(tenant.id);
 
-    const repoA = strataA.repo(NoteDef) as Repository<Note>;
+    const repoA = fyredbA.repo(NoteDef) as Repository<Note>;
     const sharedId = repoA.save({ title: 'Original', body: 'v0', priority: 1 });
-    await strataA.tenants.sync();
+    await fyredbA.tenants.sync();
 
     // Device B: load the same tenant, hydrate
-    const strataB = track(new Strata({
+    const fyredbB = track(new FyreDb({
       appId: 'test',
       entities: [NoteDef],
       localAdapter: localB,
       cloudAdapter: sharedCloud,
       deviceId: 'device-B',
     }));
-    await strataB.tenants.create({ name: 'Shared', meta, id: tenant.id });
-    await strataB.tenants.open(tenant.id);
+    await fyredbB.tenants.create({ name: 'Shared', meta, id: tenant.id });
+    await fyredbB.tenants.open(tenant.id);
 
-    const repoB = strataB.repo(NoteDef) as Repository<Note>;
+    const repoB = fyredbB.repo(NoteDef) as Repository<Note>;
+    await firstValueFrom(repoB.observe(sharedId).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
     expect(repoB.get(sharedId)!.title).toBe('Original');
 
     // Both write in parallel (different values, different timestamps)
     repoA.save({ title: 'Edit from A', body: 'vA', priority: 2, id: sharedId } as Note & { id: string });
-    await strataA.tenants.sync();
+    await fyredbA.tenants.sync();
 
     // Small delay so B has a later wall-clock timestamp
     await new Promise(r => setTimeout(r, 5));
     repoB.save({ title: 'Edit from B', body: 'vB', priority: 3, id: sharedId } as Note & { id: string });
-    await strataB.tenants.sync();
+    await fyredbB.tenants.sync();
 
     // B synced last → B's HLC is higher → B wins in cloud
     // Re-sync A to pull B's version
-    await strataA.tenants.sync();
+    await fyredbA.tenants.sync();
 
     expect(repoA.get(sharedId)!.title).toBe('Edit from B');
     expect(repoA.get(sharedId)!.body).toBe('vB');
@@ -257,7 +259,7 @@ describe('Multi-tenant parallel sync integration', () => {
     const metaA = { folder: 'ws-a' };
     const metaB = { folder: 'ws-b' };
 
-    const strata = track(new Strata({
+    const fyredb = track(new FyreDb({
       appId: 'test',
       entities: [NoteDef],
       localAdapter,
@@ -265,20 +267,20 @@ describe('Multi-tenant parallel sync integration', () => {
       deviceId: 'dev-1',
     }));
 
-    const tenantA = await strata.tenants.create({ name: 'A', meta: metaA });
-    const tenantB = await strata.tenants.create({ name: 'B', meta: metaB });
+    const tenantA = await fyredb.tenants.create({ name: 'A', meta: metaA });
+    const tenantB = await fyredb.tenants.create({ name: 'B', meta: metaB });
 
     // Work in tenant A
-    await strata.tenants.open(tenantA.id);
-    const noteRepo = strata.repo(NoteDef) as Repository<Note>;
+    await fyredb.tenants.open(tenantA.id);
+    const noteRepo = fyredb.repo(NoteDef) as Repository<Note>;
     noteRepo.save({ title: 'A note', body: 'a', priority: 1 });
-    await strata.tenants.sync();
+    await fyredb.tenants.sync();
 
     // Switch to tenant B
-    await strata.tenants.open(tenantB.id);
-    const noteRepoB = strata.repo(NoteDef) as Repository<Note>;
+    await fyredb.tenants.open(tenantB.id);
+    const noteRepoB = fyredb.repo(NoteDef) as Repository<Note>;
     noteRepoB.save({ title: 'B note', body: 'b', priority: 2 });
-    await strata.tenants.sync();
+    await fyredb.tenants.sync();
 
     // While on tenant B, an external device writes to tenant A's cloud
     const externalNote = {
@@ -296,9 +298,15 @@ describe('Multi-tenant parallel sync integration', () => {
       'note._.ext-a': externalNote,
     });
 
-    // Switch back to tenant A — re-load triggers cloud hydration
-    await strata.tenants.open(tenantA.id);
-    const noteRepoA2 = strata.repo(NoteDef) as Repository<Note>;
+    // Switch back to tenant A — lazy load from local, then sync to get cloud changes
+    await fyredb.tenants.open(tenantA.id);
+    const noteRepoA2 = fyredb.repo(NoteDef) as Repository<Note>;
+
+    // First trigger lazy load so partition is in memory
+    await firstValueFrom(noteRepoA2.observeQuery().pipe(filter(arr => arr.length >= 1)));
+
+    // Sync to pick up external cloud mutation
+    await fyredb.tenants.sync();
 
     // Should see both the original note and the externally injected one
     const all = noteRepoA2.query();
@@ -313,7 +321,7 @@ describe('Multi-tenant parallel sync integration', () => {
     const localAdapter = new MemoryStorageAdapter();
     const meta = { folder: 'shared' };
 
-    const strata = track(new Strata({
+    const fyredb = track(new FyreDb({
       appId: 'test',
       entities: [NoteDef],
       localAdapter,
@@ -325,10 +333,10 @@ describe('Multi-tenant parallel sync integration', () => {
       },
     }));
 
-    const tenant = await strata.tenants.create({ name: 'Shared', meta });
-    await strata.tenants.open(tenant.id);
+    const tenant = await fyredb.tenants.create({ name: 'Shared', meta });
+    await fyredb.tenants.open(tenant.id);
 
-    const noteRepo = strata.repo(NoteDef) as Repository<Note>;
+    const noteRepo = fyredb.repo(NoteDef) as Repository<Note>;
     noteRepo.save({ title: 'Local', body: 'local', priority: 1 });
 
     // Wait for auto-flush to persist locally
@@ -365,50 +373,52 @@ describe('Multi-tenant parallel sync integration', () => {
     const localB = new MemoryStorageAdapter();
     const meta = { folder: 'shared' };
 
-    const strataA = track(new Strata({
+    const fyredbA = track(new FyreDb({
       appId: 'test',
       entities: [NoteDef, ProjectDef],
       localAdapter: localA,
       cloudAdapter: sharedCloud,
       deviceId: 'device-A',
     }));
-    const tenant = await strataA.tenants.create({ name: 'Multi', meta });
-    await strataA.tenants.open(tenant.id);
+    const tenant = await fyredbA.tenants.create({ name: 'Multi', meta });
+    await fyredbA.tenants.open(tenant.id);
 
     // Device A writes notes
-    const noteRepoA = strataA.repo(NoteDef) as Repository<Note>;
+    const noteRepoA = fyredbA.repo(NoteDef) as Repository<Note>;
     const noteIdA = noteRepoA.save({ title: 'A note', body: 'from A', priority: 1 });
 
     // Device A writes projects
-    const projectRepoA = strataA.repo(ProjectDef) as Repository<Project>;
+    const projectRepoA = fyredbA.repo(ProjectDef) as Repository<Project>;
     const projIdA = projectRepoA.save({ name: 'Project Alpha', active: true });
-    await strataA.tenants.sync();
+    await fyredbA.tenants.sync();
 
     // Device B hydrates and writes its own entities of both types
-    const strataB = track(new Strata({
+    const fyredbB = track(new FyreDb({
       appId: 'test',
       entities: [NoteDef, ProjectDef],
       localAdapter: localB,
       cloudAdapter: sharedCloud,
       deviceId: 'device-B',
     }));
-    await strataB.tenants.create({ name: 'Multi', meta, id: tenant.id });
-    await strataB.tenants.open(tenant.id);
+    await fyredbB.tenants.create({ name: 'Multi', meta, id: tenant.id });
+    await fyredbB.tenants.open(tenant.id);
 
-    const noteRepoB = strataB.repo(NoteDef) as Repository<Note>;
-    const projectRepoB = strataB.repo(ProjectDef) as Repository<Project>;
+    const noteRepoB = fyredbB.repo(NoteDef) as Repository<Note>;
+    const projectRepoB = fyredbB.repo(ProjectDef) as Repository<Project>;
 
-    // B should have A's data
+    // B should have A's data after lazy load
+    await firstValueFrom(noteRepoB.observe(noteIdA).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
+    await firstValueFrom(projectRepoB.observe(projIdA).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)));
     expect(noteRepoB.get(noteIdA)!.title).toBe('A note');
     expect(projectRepoB.get(projIdA)!.name).toBe('Project Alpha');
 
     // B writes its own
     const noteIdB = noteRepoB.save({ title: 'B note', body: 'from B', priority: 5 });
     const projIdB = projectRepoB.save({ name: 'Project Beta', active: false });
-    await strataB.tenants.sync();
+    await fyredbB.tenants.sync();
 
     // A syncs and gets B's entities
-    await strataA.tenants.sync();
+    await fyredbA.tenants.sync();
     expect(noteRepoA.get(noteIdB)!.title).toBe('B note');
     expect(projectRepoA.get(projIdB)!.name).toBe('Project Beta');
 
@@ -425,7 +435,7 @@ describe('Multi-tenant parallel sync integration', () => {
 
     function makeDevice(id: string) {
       const local = new MemoryStorageAdapter();
-      const s = track(new Strata({
+      const s = track(new FyreDb({
         appId: 'test',
         entities: [NoteDef],
         localAdapter: local,

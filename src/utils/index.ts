@@ -4,9 +4,5 @@ export { generateId } from './id';
 export { assertNotDisposed } from './assert';
 export { serialize, deserialize } from './serialize';
 export { ReactiveFlag } from './reactive-flag';
-export {
-  pbkdf2DeriveKey, pbkdf2DeriveKeyWithSalt, aesGcmGenerateKey, exportCryptoKey, importAesGcmKey,
-  aesGcmEncrypt, aesGcmDecrypt,
-} from './crypto';
-export { FNV_OFFSET, FNV_PRIME, fnv1a, fnv1aAppend } from './fnv';
+export { FNV_OFFSET, FNV_PRIME, fnv1a, fnv1aAppend, fnvHash } from './fnv';
 export { compareValues, valuesEqual } from './compare';

@@ -1,12 +1,12 @@
 import {
-  Strata,
+  FyreDb,
   MemoryStorageAdapter,
   defineEntity,
   saveTenantPrefs,
-  noopEncryptionService,
-} from 'strata-data-sync';
-import { EncryptedDataAdapter, type DataAdapter } from 'strata-data-sync';
-import { TenantContext } from 'strata-data-sync';
+  NOOP_ENCRYPTION_SERVICE,
+} from '@fyre-db/core';
+import { EncryptedDataAdapter, type DataAdapter } from '@fyre-db/core';
+import { TenantContext } from '@fyre-db/core';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir } from './common';
 
 // ── Entity ───────────────────────────────────────────────
@@ -16,12 +16,12 @@ const TaskDef = defineEntity<Task>('task');
 
 // ── Shared cloud adapter (simulates a remote backend) ───
 
-const sharedCloud = new MemoryStorageAdapter();
-const sharedCloudDa: DataAdapter = new EncryptedDataAdapter(sharedCloud, noopEncryptionService, new TenantContext());
-
-// Both users derive the same tenant ID from the folder metadata
-const deriveTenantId = (meta: Record<string, unknown>) =>
-  `shared-${(meta.folderId as string).substring(0, 4)}`;
+const sharedCloud = Object.assign(new MemoryStorageAdapter(), {
+  // Cloud adapter owns tenant ID derivation — same folder = same tenant ID
+  deriveTenantId: (meta: Record<string, unknown>) =>
+    `shared-${(meta.folderId as string).substring(0, 4)}`,
+});
+const sharedCloudDa: DataAdapter = new EncryptedDataAdapter(sharedCloud, NOOP_ENCRYPTION_SERVICE, new TenantContext());
 
 // ── Main ─────────────────────────────────────────────────
 
@@ -36,24 +36,23 @@ async function main() {
   console.log('--- User A: Creating workspace ---');
 
   const storageA = new FsStorageAdapter(dataDir + '-deviceA');
-  const strataA = new Strata({
+  const fyredbA = new FyreDb({
     appId: 'sharing-demo',
     entities: [TaskDef],
     localAdapter: storageA,
     cloudAdapter: sharedCloud,
     deviceId: 'device-A',
-    deriveTenantId,
   });
 
-  const tenantA = await strataA.tenants.create({
+  const tenantA = await fyredbA.tenants.create({
     name: 'Project X',
     meta: { folderId: 'abc123' },
   });
   console.log(`  Tenant created: ${tenantA.id}`);
 
-  await strataA.tenants.open(tenantA.id);
+  await fyredbA.tenants.open(tenantA.id);
 
-  const tasks = strataA.repo(TaskDef);
+  const tasks = fyredbA.repo(TaskDef);
   tasks.save({ title: 'Design the schema', done: true });
   tasks.save({ title: 'Write the tests', done: false });
   tasks.save({ title: 'Ship it!', done: false });
@@ -66,10 +65,10 @@ async function main() {
   console.log('  Saved tenant prefs (name: "Project X")');
 
   // Sync to cloud
-  const syncResult = await strataA.tenants.sync();
+  const syncResult = await fyredbA.tenants.sync();
   console.log(`  Synced to cloud (${syncResult.entitiesUpdated} entities pushed)`);
 
-  await strataA.dispose();
+  await fyredbA.dispose();
   console.log('  User A disposed\n');
 
   // ─── User B: join existing workspace ──────────────────
@@ -77,23 +76,23 @@ async function main() {
   console.log('--- User B: Joining workspace ---');
 
   const storageB = new FsStorageAdapter(dataDir + '-deviceB');
-  const strataB = new Strata({
+  const fyredbB = new FyreDb({
     appId: 'sharing-demo',
     entities: [TaskDef],
     localAdapter: sharedCloud,  // User B reads directly from cloud for setup
+    cloudAdapter: sharedCloud,  // Cloud adapter provides deriveTenantId
     deviceId: 'device-B',
-    deriveTenantId,
   });
 
   // join() detects the existing workspace via the marker blob
-  const tenantB = await strataB.tenants.join({
+  const tenantB = await fyredbB.tenants.join({
     meta: { folderId: 'abc123' },
   });
   console.log(`  Join detected tenant: ${tenantB.id} (name: "${tenantB.name}")`);
 
-  await strataB.tenants.open(tenantB.id);
+  await fyredbB.tenants.open(tenantB.id);
 
-  const tasksB = strataB.repo(TaskDef);
+  const tasksB = fyredbB.repo(TaskDef);
   const allTasks = tasksB.query();
   console.log(`  User B sees ${allTasks.length} tasks:`);
   for (const t of allTasks) {
@@ -103,7 +102,7 @@ async function main() {
   // Tenant name should be "Project X" from prefs
   console.log(`\n  Tenant name from prefs: "${tenantB.name}"`);
 
-  await strataB.dispose();
+  await fyredbB.dispose();
   console.log('  User B disposed\n');
 
   console.log('=== Done ===');

@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { createDataAdapter } from '../helpers';
-import { Store } from '@strata/store';
+import { Store } from '@/store';
 import { DEFAULT_OPTIONS } from '../helpers';
-import { loadPartitionFromAdapter } from '@strata/store/flush';
-import type { Hlc } from '@strata/hlc';
-import type { BlobMigration } from '@strata/schema/migration';
+import { loadPartitionFromAdapter } from '@/store/flush';
+import type { Hlc } from '@/hlc';
+import type { BlobMigration } from '@/schema/migration';
 
 describe('Schema migration integration', () => {
   it('migrates v1 blob to v2 on load', async () => {

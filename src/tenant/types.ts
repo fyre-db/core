@@ -1,5 +1,5 @@
 import type { Observable } from 'rxjs';
-import type { SyncResult } from '@strata/sync';
+import type { SyncResult } from '@/sync';
 
 export type Tenant = {
   readonly id: string;
@@ -18,17 +18,17 @@ export type ProbeResult =
 export type CreateTenantOptions = {
   readonly name: string;
   readonly meta: Record<string, unknown>;
-  readonly id?: string;
   readonly encryption?: { readonly credential: string };
 };
 
 export type JoinTenantOptions = {
+  readonly name: string;
   readonly meta: Record<string, unknown>;
-  readonly name?: string;
 };
 
 export type TenantManager = {
-  list(): Promise<ReadonlyArray<Tenant>>;
+  readonly tenants$: Observable<readonly Tenant[]>;
+  readonly tenants: readonly Tenant[];
   probe(ref: { meta: Record<string, unknown> }): Promise<ProbeResult>;
   create(opts: CreateTenantOptions): Promise<Tenant>;
   join(opts: JoinTenantOptions): Promise<Tenant>;

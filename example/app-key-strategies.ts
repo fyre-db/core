@@ -1,4 +1,4 @@
-import { Strata, defineEntity, partitioned } from 'strata-data-sync';
+import { FyreDb, defineEntity, partitioned } from '@fyre-db/core';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir } from './common';
 
 // ─── Entity types ────────────────────────────────────────
@@ -28,7 +28,7 @@ async function main() {
 
   const storage = new FsStorageAdapter(dataDir);
 
-  const db = new Strata({
+  const db = new FyreDb({
     appId: 'key-strategies-demo',
     entities: [Task, Note, Settings],
     localAdapter: storage,

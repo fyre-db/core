@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { fnv1a, fnv1aAppend, FNV_OFFSET } from '@strata/utils';
-import { partitionHash } from '@strata/persistence';
+import { fnv1a, fnv1aAppend, FNV_OFFSET } from '@/utils';
+import { partitionHash } from '@/persistence';
 
 describe('FNV-1a Hashing', () => {
   describe('fnv1a', () => {

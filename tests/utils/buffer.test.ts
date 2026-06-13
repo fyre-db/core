@@ -4,7 +4,7 @@ import {
   toBase64,
   fromBase64,
   streamToUint8Array,
-} from '@strata/utils';
+} from '@/utils';
 
 describe('buffer utilities', () => {
   describe('toArrayBuffer', () => {

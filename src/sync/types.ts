@@ -1,6 +1,6 @@
-import type { Hlc } from '@strata/hlc';
-import type { Tenant } from '@strata/adapter';
-import type { ReactiveFlag } from '@strata/utils';
+import type { Hlc } from '@/hlc';
+import type { Tenant } from '@/adapter';
+import type { ReactiveFlag } from '@/utils';
 
 export type PartitionDiffResult = {
   readonly localOnly: ReadonlyArray<string>;
@@ -81,6 +81,11 @@ export type SyncEngine = {
     tenant: Tenant | undefined,
     steps: ReadonlyArray<[SyncLocation, SyncLocation]>,
   ): Promise<SyncBetweenResult[]>;
+  ensurePartition(
+    tenant: Tenant | undefined,
+    entityName: string,
+    partitionKey: string,
+  ): Promise<void>;
   startScheduler(
     tenant: Tenant | undefined,
     hasCloud: boolean,

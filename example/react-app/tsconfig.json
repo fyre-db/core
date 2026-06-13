@@ -12,8 +12,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "paths": {
-      "strata-data-sync": ["../../src/index.ts"],
-      "@strata/*": ["../../src/*"]
+      "@fyre-db/core": ["../../src/index.ts"],
+      "@fyre-db/core/*": ["../../src/*"]
     }
   },
   "include": ["src"]

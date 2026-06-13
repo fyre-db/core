@@ -1,5 +1,5 @@
-import { Strata, MemoryStorageAdapter, defineEntity } from 'strata-data-sync';
-import type { SyncEvent } from 'strata-data-sync';
+import { FyreDb, MemoryStorageAdapter, defineEntity } from '@fyre-db/core';
+import type { SyncEvent } from '@fyre-db/core';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir } from './common';
 
 type Task = { title: string; done: boolean };
@@ -16,7 +16,7 @@ async function main() {
   const storage1 = new FsStorageAdapter(dataDir + '-device1');
   const storage2 = new FsStorageAdapter(dataDir + '-device2');
 
-  const device1 = new Strata({
+  const device1 = new FyreDb({
     appId: 'demo',
     entities: [taskDef],
     localAdapter: storage1,
@@ -24,7 +24,7 @@ async function main() {
     deviceId: 'device-1',
   });
 
-  const device2 = new Strata({
+  const device2 = new FyreDb({
     appId: 'demo',
     entities: [taskDef],
     localAdapter: storage2,

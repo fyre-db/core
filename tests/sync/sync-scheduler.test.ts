@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createDataAdapter } from '../helpers';
-import { createHlc } from '@strata/hlc';
-import { EventBus } from '@strata/reactive';
-import type { EntityEvent } from '@strata/reactive';
-import { Store } from '@strata/store';
+import { createHlc } from '@/hlc';
+import { EventBus } from '@/reactive';
+import type { EntityEvent } from '@/reactive';
+import { Store } from '@/store';
 import { DEFAULT_OPTIONS } from '../helpers';
-import { SyncEngine } from '@strata/sync';
-import type { SyncEvent } from '@strata/sync';
-import { ReactiveFlag } from '@strata/utils';
+import { SyncEngine } from '@/sync';
+import type { SyncEvent } from '@/sync';
+import { ReactiveFlag } from '@/utils';
 
 function makeEngine(opts?: { cloud?: boolean }) {
   const store = new Store(DEFAULT_OPTIONS);
@@ -16,7 +16,7 @@ function makeEngine(opts?: { cloud?: boolean }) {
   const hlcRef = { current: createHlc('test') };
   const eventBus = new EventBus<EntityEvent>();
   const syncEventBus = new EventBus<SyncEvent>();
-  const engine = new SyncEngine(store, local, cloud, ['task'], hlcRef, eventBus, syncEventBus, undefined, DEFAULT_OPTIONS);
+  const engine = new SyncEngine(store, local, cloud, ['task'], hlcRef, eventBus, syncEventBus, DEFAULT_OPTIONS);
   return { engine, store, local, cloud };
 }
 
@@ -126,7 +126,7 @@ describe('SyncEngine scheduler', () => {
     const hlcRef = { current: createHlc('test') };
     const eventBus = new EventBus<EntityEvent>();
     const syncEventBus = new EventBus<SyncEvent>();
-    const engine = new SyncEngine(store, local, cloud, ['task'], hlcRef, eventBus, syncEventBus, undefined, {
+    const engine = new SyncEngine(store, local, cloud, ['task'], hlcRef, eventBus, syncEventBus, {
       ...DEFAULT_OPTIONS,
       cloudSyncIntervalMs: 100,
       localFlushIntervalMs: 50,
@@ -151,7 +151,7 @@ describe('SyncEngine scheduler', () => {
     const hlcRef = { current: createHlc('test') };
     const eventBus = new EventBus<EntityEvent>();
     const syncEventBus = new EventBus<SyncEvent>();
-    const engine = new SyncEngine(store, local, cloud, ['task'], hlcRef, eventBus, syncEventBus, undefined, {
+    const engine = new SyncEngine(store, local, cloud, ['task'], hlcRef, eventBus, syncEventBus, {
       ...DEFAULT_OPTIONS,
       cloudSyncIntervalMs: 100,
       localFlushIntervalMs: 50,
@@ -173,8 +173,8 @@ describe('SyncEngine scheduler', () => {
     const hlcRef = { current: createHlc('test') };
     const eventBus = new EventBus<EntityEvent>();
     const syncEventBus = new EventBus<SyncEvent>();
-    // Create engine without options — triggers ?? fallbacks
-    const engine = new SyncEngine(store, local, cloud, ['task'], hlcRef, eventBus, syncEventBus);
+    // Create engine with default options
+    const engine = new SyncEngine(store, local, cloud, ['task'], hlcRef, eventBus, syncEventBus, DEFAULT_OPTIONS);
 
     engine.startScheduler(undefined, true);
     engine.stopScheduler();

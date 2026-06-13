@@ -1,19 +1,18 @@
-import debug from 'debug';
 import { startWith, map, distinctUntilChanged } from 'rxjs/operators';
-import type { Hlc } from '@strata/hlc';
-import { tick } from '@strata/hlc';
-import type { EntityDefinition, BaseEntity } from '@strata/schema';
-import { formatEntityId } from '@strata/schema';
-import { generateId, parseEntityKey } from '@strata/utils';
-import type { EventBus } from '@strata/reactive';
-import type { EntityEvent } from '@strata/reactive';
+import type { Hlc } from '@/hlc';
+import { tick } from '@/hlc';
+import type { EntityDefinition, BaseEntity } from '@/schema';
+import { formatEntityId } from '@/schema';
+import { generateId, parseEntityKey, parseCompositeKey } from '@/utils';
+import type { EventBus } from '@/reactive';
+import type { EntityEvent } from '@/reactive';
 import { filter } from 'rxjs/operators';
-import type { EntityStore } from '@strata/store';
-import type { Repository as RepositoryType, QueryOptions } from './types';
+import type { EntityStore } from '@/store';
+import { FyreDbConfigError } from '@/errors';
+import type { QueryOptions } from './types';
 import { applyWhere, applyRange, applyOrderBy, applyPagination } from './query';
-import { assertNotDisposed } from '@strata/utils';
-
-const log = debug('strata:repo');
+import { assertNotDisposed } from '@/utils';
+import { log } from '@/log';
 
 function entityComparator<T extends BaseEntity>(
   a: (T & BaseEntity) | undefined,
@@ -43,10 +42,12 @@ export class Repository<T> {
     private readonly store: EntityStore,
     private readonly hlc: { current: Hlc },
     private readonly eventBus: EventBus<EntityEvent>,
+    private readonly ensurePartition?: (entityName: string, partitionKey: string) => Promise<void>,
   ) {}
 
   get(id: string): (T & BaseEntity) | undefined {
     const entityKey = parseEntityKey(id);
+    this.triggerEnsureById(entityKey);
     return this.store.getEntity(entityKey, id) as (T & BaseEntity) | undefined;
   }
 
@@ -56,7 +57,7 @@ export class Repository<T> {
 
     if (partial.id) {
       if (!partial.id.startsWith(this.definition.name + '.')) {
-        throw new Error(`Entity ID "${partial.id}" does not belong to repository "${this.definition.name}"`);
+        throw new FyreDbConfigError(`Entity ID "${partial.id}" does not belong to repository "${this.definition.name}"`);
       }
       id = partial.id;
       entityKey = parseEntityKey(id);
@@ -70,7 +71,7 @@ export class Repository<T> {
     }
 
     if (id.length > 256) {
-      throw new Error(`Entity ID exceeds maximum length of 256 characters (got ${id.length})`);
+      throw new FyreDbConfigError(`Entity ID exceeds maximum length of 256 characters (got ${id.length})`);
     }
 
     const existing = this.store.getEntity(entityKey, id) as (T & BaseEntity) | undefined;
@@ -90,7 +91,7 @@ export class Repository<T> {
 
     this.store.setEntity(entityKey, id, entity);
     this.hlc.current = nextHlc;
-    log('saved %s', id);
+    log.repo('saved %s', id);
 
     return id;
   }
@@ -117,11 +118,18 @@ export class Repository<T> {
     const entityKey = parseEntityKey(id);
     const entity = this.store.getEntity(entityKey, id) as (T & BaseEntity) | undefined;
     if (entity) {
-      this.store.setTombstone(entityKey, id, entity.hlc);
+      // A delete is a new operation: stamp the tombstone with a freshly ticked
+      // HLC (causally after the entity's own hlc and carrying a current
+      // timestamp). Reusing `entity.hlc` would make the tombstone equal to —
+      // not newer than — the value, and its stale timestamp could be pruned by
+      // tombstone-retention before the delete propagates, resurrecting the row.
+      const nextHlc = tick(this.hlc.current);
+      this.hlc.current = nextHlc;
+      this.store.setTombstone(entityKey, id, nextHlc);
     }
     const deleted = this.store.deleteEntity(entityKey, id);
     if (deleted) {
-      log('deleted %s', id);
+      log.repo('deleted %s', id);
     }
     return deleted;
   }
@@ -149,7 +157,11 @@ export class Repository<T> {
   }
 
   query(opts?: QueryOptions<T>): ReadonlyArray<T & BaseEntity> {
-    const partitionKeys = this.store.getAllPartitionKeys(this.definition.name);
+    this.triggerEnsureForQuery(opts);
+
+    const partitionKeys = opts?.keys
+      ? opts.keys.map(k => `${this.definition.name}.${k}`)
+      : this.store.getAllPartitionKeys(this.definition.name);
 
     const collected: (T & BaseEntity)[] = [];
     for (const key of partitionKeys) {
@@ -187,9 +199,11 @@ export class Repository<T> {
 
   observe(id: string) {
     assertNotDisposed(this.disposed, 'Repository');
+    const entityKey = parseEntityKey(id);
+    this.triggerEnsureById(entityKey);
     return this.eventBus.all$.pipe(
       filter((e: EntityEvent) => e.entityName === this.definition.name),
-      startWith(undefined as void),
+      startWith(undefined),
       map(() => this.get(id)),
       distinctUntilChanged(entityComparator),
     );
@@ -197,9 +211,10 @@ export class Repository<T> {
 
   observeQuery(opts?: QueryOptions<T>) {
     assertNotDisposed(this.disposed, 'Repository');
+    this.triggerEnsureForQuery(opts);
     return this.eventBus.all$.pipe(
       filter((e: EntityEvent) => e.entityName === this.definition.name),
-      startWith(undefined as void),
+      startWith(undefined),
       map(() => this.query(opts)),
       distinctUntilChanged((prev, next) => !resultsChanged(prev, next)),
     );
@@ -208,6 +223,26 @@ export class Repository<T> {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    log('disposed %s repository', this.definition.name);
+    log.repo('disposed %s repository', this.definition.name);
+  }
+
+  private triggerEnsureById(entityKey: string): void {
+    if (!this.ensurePartition) return;
+    const parsed = parseCompositeKey(entityKey);
+    if (!parsed) return;
+    void this.ensurePartition(this.definition.name, parsed.rest);
+  }
+
+  private triggerEnsureForQuery(opts?: QueryOptions<T>): void {
+    if (!this.ensurePartition) return;
+    if (opts?.keys) {
+      for (const key of opts.keys) {
+        void this.ensurePartition(this.definition.name, key);
+      }
+      return;
+    }
+    if (this.definition.keyStrategy.kind !== 'partitioned') {
+      void this.ensurePartition(this.definition.name, '_');
+    }
   }
 }

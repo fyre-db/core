@@ -1,8 +1,8 @@
-import type { StorageAdapter, EncryptionService } from '@strata/adapter';
-import type { TenantContext } from '@strata/tenant/tenant-context';
-import type { Tenant } from '@strata/adapter';
+import type { StorageAdapter, EncryptionService } from '@/adapter';
+import type { TenantContext } from '@/tenant/tenant-context';
+import type { Tenant } from '@/adapter';
 import type { PartitionBlob } from './types';
-import { serialize, deserialize } from '@strata/utils';
+import { serialize, deserialize } from '@/utils';
 
 export type DataAdapter = {
   read(tenant: Tenant | undefined, key: string): Promise<PartitionBlob | null>;
@@ -34,4 +34,6 @@ export class EncryptedDataAdapter implements DataAdapter {
     return this.adapter.delete(tenant, key);
   }
 }
+
+
 

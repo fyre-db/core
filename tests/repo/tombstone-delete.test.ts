@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { Store } from '@strata/store';
+import { Store } from '@/store';
 import { DEFAULT_OPTIONS } from '../helpers';
-import { createHlc } from '@strata/hlc';
-import { EventBus } from '@strata/reactive';
-import type { EntityEvent } from '@strata/reactive';
-import { defineEntity } from '@strata/schema';
-import { Repository } from '@strata/repo';
+import { createHlc, compareHlc } from '@/hlc';
+import { EventBus } from '@/reactive';
+import type { EntityEvent } from '@/reactive';
+import { defineEntity } from '@/schema';
+import { Repository } from '@/repo';
 
 type Task = {
   name: string;
@@ -14,7 +14,7 @@ type Task = {
 const taskDef = defineEntity<Task>('task');
 
 describe('Repository delete tombstone integration', () => {
-  it('delete records tombstone with entity HLC', () => {
+  it('delete records tombstone with a freshly ticked HLC (newer than the entity)', () => {
     const store = new Store(DEFAULT_OPTIONS);
     const hlc = { current: createHlc('device1') };
     const eventBus = new EventBus<EntityEvent>();
@@ -29,7 +29,11 @@ describe('Repository delete tombstone integration', () => {
     const entityKey = id.substring(0, id.lastIndexOf('.'));
     const tombstones = store.getTombstones(entityKey);
     expect(tombstones.has(id)).toBe(true);
-    expect(tombstones.get(id)).toEqual(savedHlc);
+    // A delete is a new operation: its tombstone must be causally AFTER the
+    // entity's own HLC, not equal to it. An equal/stale tombstone HLC would
+    // lose merges and be pruned by retention, resurrecting the row.
+    const tombstoneHlc = tombstones.get(id)!;
+    expect(compareHlc(tombstoneHlc, savedHlc)).toBeGreaterThan(0);
   });
 
   it('deleteMany records tombstones for all deleted entities', () => {

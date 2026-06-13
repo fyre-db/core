@@ -1,12 +1,12 @@
-import type { Tenant } from '@strata/adapter';
+import type { Tenant } from '@/adapter';
 import type { AllIndexes, PartitionIndex, PartitionBlob } from './types';
 import type { DataAdapter } from './blob-io';
-import type { ResolvedStrataOptions } from '../options';
+import type { ResolvedFyreDbOptions } from '../options';
 
 export async function loadAllIndexes(
   adapter: DataAdapter,
   tenant: Tenant | undefined,
-  options: ResolvedStrataOptions,
+  options: ResolvedFyreDbOptions,
 ): Promise<AllIndexes> {
   const blob = await adapter.read(tenant, options.markerKey);
   if (!blob) return {};
@@ -20,12 +20,13 @@ export async function saveAllIndexes(
   adapter: DataAdapter,
   tenant: Tenant | undefined,
   indexes: AllIndexes,
-  options: ResolvedStrataOptions,
+  options: ResolvedFyreDbOptions,
 ): Promise<void> {
   const existing = await adapter.read(tenant, options.markerKey);
   let markerData: Record<string, unknown>;
   if (existing) {
     const systemEntities = existing[options.systemEntityKey] as Record<string, unknown> | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     markerData = systemEntities?.['marker'] as Record<string, unknown> ?? { version: 1, createdAt: new Date(), entityTypes: [] };
   } else {
     markerData = { version: 1, createdAt: new Date(), entityTypes: [] };

@@ -9,8 +9,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      'strata-data-sync': path.resolve(__dirname, '../../src/index.ts'),
-      '@strata': path.resolve(__dirname, '../../src'),
+      '@fyre-db/core': path.resolve(__dirname, '../../src/index.ts'),
+      '@fyredb': path.resolve(__dirname, '../../src'),
     },
   },
 });

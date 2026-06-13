@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { Store } from '@strata/store';
+import { Store } from '@/store';
 import { DEFAULT_OPTIONS } from '../helpers';
-import type { Hlc } from '@strata/hlc';
+import type { Hlc } from '@/hlc';
 
 describe('EntityStore tombstones', () => {
   const hlc1: Hlc = { timestamp: 1000, counter: 0, nodeId: 'node1' };

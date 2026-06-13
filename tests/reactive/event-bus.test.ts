@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { take, toArray, filter } from 'rxjs/operators';
-import { EventBus } from '@strata/reactive';
-import type { EntityEvent } from '@strata/reactive';
+import { EventBus } from '@/reactive';
+import type { EntityEvent } from '@/reactive';
 
 function makeEvent(entityName: string) {
   return { entityName, source: 'user' as const, updates: [] as string[], deletes: [] as string[] };

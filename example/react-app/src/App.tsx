@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Tenant } from 'strata-data-sync';
-import { strata, taskDef } from './strata';
-import type { Task } from './strata';
+import type { Tenant } from '@fyre-db/core';
+import { fyredb, taskDef } from './fyredb';
+import type { Task } from './fyredb';
 import { useQuery } from './hooks';
 
 // ─── Tenant Picker ───────────────────────────────────────
@@ -98,7 +98,7 @@ function AddTaskForm({ onAdd }: { onAdd: (title: string) => void }) {
 // ─── Task List (reactive) ────────────────────────────────
 
 function TaskList() {
-  const repo = strata.repo(taskDef);
+  const repo = fyredb.repo(taskDef);
   const tasks = useQuery<Task>(repo);
 
   const toggle = useCallback(
@@ -157,16 +157,16 @@ export default function App() {
 
   // Load tenant list on mount
   useEffect(() => {
-    strata.tenants.list().then(setTenants);
+    fyredb.tenants.list().then(setTenants);
   }, []);
 
   const handleCreate = useCallback(async (name: string) => {
-    const tenant = await strata.tenants.create({ name, meta: {} });
-    const list = await strata.tenants.list();
+    const tenant = await fyredb.tenants.create({ name, meta: {} });
+    const list = await fyredb.tenants.list();
     setTenants(list);
     // Auto-load the new tenant
     setLoading(true);
-    await strata.loadTenant(tenant.id);
+    await fyredb.loadTenant(tenant.id);
     setActiveTenantId(tenant.id);
     setLoading(false);
   }, []);
@@ -174,14 +174,14 @@ export default function App() {
   const handleSelect = useCallback(async (id: string) => {
     if (id === activeTenantId) return;
     setLoading(true);
-    await strata.loadTenant(id);
+    await fyredb.loadTenant(id);
     setActiveTenantId(id);
     setLoading(false);
   }, [activeTenantId]);
 
   return (
     <div>
-      <h1>Strata React Example</h1>
+      <h1>FyreDb React Example</h1>
       <p style={{ color: '#666', marginBottom: '1rem' }}>
         Multi-tenant task manager with reactive updates
       </p>

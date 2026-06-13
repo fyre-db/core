@@ -1,5 +1,5 @@
-import type { Hlc } from '@strata/hlc';
-import { compareHlc } from '@strata/hlc';
+import type { Hlc } from '@/hlc';
+import { compareHlc } from '@/hlc';
 import type { SyncEntity } from './types';
 
 export function resolveConflict<T extends SyncEntity>(

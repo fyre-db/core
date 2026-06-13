@@ -1,29 +1,45 @@
-import debug from 'debug';
-import type { Tenant } from '@strata/adapter';
-import type { Hlc } from '@strata/hlc';
-import { tick } from '@strata/hlc';
-import type { EventBus } from '@strata/reactive';
-import type { EntityEvent } from '@strata/reactive';
-import type { EntityStore } from '@strata/store';
-import type { BlobMigration } from '@strata/schema/migration';
-import type { DataAdapter } from '@strata/persistence';
-import { parseCompositeKey } from '@strata/utils';
-import type { ReactiveFlag } from '@strata/utils';
-import type { ResolvedStrataOptions } from '../options';
+import type { Tenant } from '@/adapter';
+import { partitionBlobKey } from '@/adapter';
+import type { Hlc } from '@/hlc';
+import { tick } from '@/hlc';
+import type { EventBus } from '@/reactive';
+import type { EntityEvent } from '@/reactive';
+import type { EntityStore } from '@/store';
+import type { BlobMigration } from '@/schema/migration';
+import type { DataAdapter, AllIndexes } from '@/persistence';
+import { parseCompositeKey } from '@/utils';
+import type { ReactiveFlag } from '@/utils';
+import type { ResolvedFyreDbOptions } from '../options';
+import { SyncError } from './errors';
+import { FyreDbError } from '@/errors';
 import type {
   SyncLocation, SyncQueueItem, SyncEvent,
-  SyncEnqueueResult, SyncEngine as SyncEngineType, SyncBetweenResult,
+  SyncEnqueueResult, SyncBetweenResult,
   SyncEntityChange,
 } from './types';
 import { syncBetween } from './unified';
+import type { PartitionFilter } from './unified';
+import { MarkerStore } from './marker-store';
+import { log } from '@/log';
 
-const log = debug('strata:sync');
+/**
+ * Whether `indexes` records a partition for the given entity. Looks the entity
+ * up through a `| undefined` view because `AllIndexes` is a `Record` and (with
+ * `noUncheckedIndexedAccess` off) the indexed access is statically non-nullish
+ * even though a missing key is `undefined` at runtime.
+ */
+function hasPartitionIndex(indexes: AllIndexes, entityName: string, partitionKey: string): boolean {
+  const partition = indexes[entityName] as AllIndexes[string] | undefined;
+  return partition?.[partitionKey] !== undefined;
+}
 
 export class SyncEngine {
   private readonly queue: SyncQueueItem[] = [];
   private running = false;
   private disposed = false;
   private inFlight: Promise<void> | null = null;
+  private readonly inFlightPartitions = new Map<string, Promise<void>>();
+  private readonly markerStore: MarkerStore;
 
   constructor(
     private readonly store: EntityStore,
@@ -33,16 +49,18 @@ export class SyncEngine {
     private readonly hlcRef: { current: Hlc },
     private readonly entityEventBus: EventBus<EntityEvent>,
     private readonly syncEventBus: EventBus<SyncEvent>,
+    private readonly options: ResolvedFyreDbOptions,
     private readonly migrations?: ReadonlyArray<BlobMigration>,
-    private readonly options?: ResolvedStrataOptions,
-  ) {}
+  ) {
+    this.markerStore = new MarkerStore(this.options);
+  }
 
   private resolveAdapter(loc: SyncLocation): DataAdapter {
     switch (loc) {
       case 'memory': return this.store;
       case 'local': return this.localAdapter;
       case 'cloud':
-        if (!this.cloudAdapter) throw new Error('No cloud adapter configured');
+        if (!this.cloudAdapter) throw new SyncError('No cloud adapter configured', { kind: 'cloud-not-configured' });
         return this.cloudAdapter;
     }
   }
@@ -53,14 +71,14 @@ export class SyncEngine {
     tenant: Tenant | undefined,
   ): Promise<SyncEnqueueResult> {
     if (this.disposed) {
-      throw new Error('SyncEngine is disposed');
+      throw new SyncError('SyncEngine is disposed', { kind: 'sync-failed' });
     }
 
     const existing = this.queue.find(
       item => item.source === source && item.target === target,
     );
     if (existing) {
-      log('dedup: %s→%s already queued', source, target);
+      log.sync('dedup: %s→%s already queued', source, target);
       await existing.promise;
       return { result: EMPTY_RESULT, deduplicated: true };
     }
@@ -77,12 +95,17 @@ export class SyncEngine {
     const fn = async () => {
       const sourceAdapter = this.resolveAdapter(source);
       const targetAdapter = this.resolveAdapter(target);
+      const partitionFilter = await this.deriveFilter(source, target, tenant);
       this.syncEventBus.emit({ type: 'sync-started', source, target });
       try {
         syncResult = await syncBetween(
-          sourceAdapter, targetAdapter, this.entityNames, tenant, this.migrations,
-          this.options,
+          sourceAdapter, targetAdapter, this.entityNames, tenant,
+          this.options, this.migrations, partitionFilter,
         );
+
+        // unified just rewrote the marker for any persistent tier it touched;
+        // drop the cached indexes so the next read recomputes them.
+        this.invalidateMarkers(source, target, tenant);
 
         if (syncResult.maxHlc) {
           this.hlcRef.current = tick(this.hlcRef.current, syncResult.maxHlc);
@@ -101,16 +124,16 @@ export class SyncEngine {
             partitionsSynced: syncResult.changesForA.length + syncResult.changesForB.length,
           },
         });
-        log('%s→%s sync complete', source, target);
+        log.sync('%s→%s sync complete', source, target);
       } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
+        const error = err instanceof Error ? err : new FyreDbError(String(err), { kind: 'unknown' });
         this.syncEventBus.emit({ type: 'sync-failed', source, target, error });
         throw err;
       }
     };
 
     this.queue.push({ source, target, fn, promise, resolve, reject });
-    this.processQueue();
+    void this.processQueue();
 
     await promise;
     return { result: syncResult, deduplicated: false };
@@ -124,8 +147,8 @@ export class SyncEngine {
       if (this.disposed) break;
       const item = this.queue[0];
       const p = item.fn().then(
-        () => item.resolve(),
-        (err) => item.reject(err instanceof Error ? err : new Error(String(err))),
+        () => { item.resolve(); },
+        (err: unknown) => { item.reject(err instanceof Error ? err : new FyreDbError(String(err), { kind: 'unknown' })); },
       );
       this.inFlight = p;
       await p;
@@ -169,31 +192,34 @@ export class SyncEngine {
     hasCloud: boolean,
     dirtyTracker?: ReactiveFlag,
   ): void {
+    if (this.disposed) {
+      throw new SyncError('SyncEngine is disposed', { kind: 'sync-failed' });
+    }
     this.stopScheduler();
 
     this.localTimer = setInterval(() => {
       this.sync('memory', 'local', tenant).catch((err: unknown) => {
-        log.extend('error')('local flush failed: %O', err);
+        log.sync.error('local flush failed: %O', err);
       });
-    }, this.options?.localFlushIntervalMs ?? 2_000);
+    }, this.options.localFlushIntervalMs);
 
     if (hasCloud) {
       this.cloudTimer = setInterval(() => {
-        (async () => {
+        void (async () => {
           try {
             await this.sync('local', 'cloud', tenant);
             await this.sync('local', 'memory', tenant);
             dirtyTracker?.clear();
           } catch (err) {
-            log.extend('error')('cloud sync failed: %O', err);
+            log.sync.error('cloud sync failed: %O', err);
           }
         })();
-      }, this.options?.cloudSyncIntervalMs ?? 300_000);
+      }, this.options.cloudSyncIntervalMs);
     }
 
-    log('scheduler started (local=%dms, cloud=%dms)',
-      this.options?.localFlushIntervalMs ?? 2_000,
-      this.options?.cloudSyncIntervalMs ?? 300_000,
+    log.sync('scheduler started (local=%dms, cloud=%dms)',
+      this.options.localFlushIntervalMs,
+      this.options.cloudSyncIntervalMs,
     );
   }
 
@@ -208,11 +234,120 @@ export class SyncEngine {
     }
   }
 
+  // ── Lazy hydration ─────────────────────────────────────
+
+  async ensurePartition(
+    tenant: Tenant | undefined,
+    entityName: string,
+    partitionKey: string,
+  ): Promise<void> {
+    const entityKey = partitionBlobKey(entityName, partitionKey);
+    if (this.store.hasPartition(entityKey)) return;
+
+    const existing = this.inFlightPartitions.get(entityKey);
+    if (existing) { await existing; return; }
+
+    const work = this.cascadeLoad(tenant, entityName, partitionKey, entityKey);
+    this.inFlightPartitions.set(entityKey, work);
+    try { await work; } finally { this.inFlightPartitions.delete(entityKey); }
+  }
+
+  private async cascadeLoad(
+    tenant: Tenant | undefined,
+    entityName: string,
+    partitionKey: string,
+    entityKey: string,
+  ): Promise<void> {
+    // Try local first
+    const localIndexes = await this.markerStore.getIndexes('local', this.localAdapter, tenant);
+    if (hasPartitionIndex(localIndexes, entityName, partitionKey)) {
+      const blob = await this.localAdapter.read(tenant, entityKey);
+      if (blob) {
+        await this.store.write(tenant, entityKey, blob);
+        this.emitEntityChangesFromBlob(entityName, blob);
+        log.sync('lazy-loaded %s from local', entityKey);
+        return;
+      }
+    }
+
+    // Try cloud
+    if (this.cloudAdapter) {
+      try {
+        const cloudIndexes = await this.markerStore.getIndexes('cloud', this.cloudAdapter, tenant);
+        if (hasPartitionIndex(cloudIndexes, entityName, partitionKey)) {
+          const blob = await this.cloudAdapter.read(tenant, entityKey);
+          if (blob) {
+            await this.localAdapter.write(tenant, entityKey, blob);
+            await this.store.write(tenant, entityKey, blob);
+            this.emitEntityChangesFromBlob(entityName, blob);
+            log.sync('lazy-loaded %s from cloud', entityKey);
+            return;
+          }
+        }
+      } catch (err) {
+        const error = err instanceof Error ? err : new FyreDbError(String(err), { kind: 'unknown' });
+        this.syncEventBus.emit({ type: 'sync-failed', source: 'local', target: 'cloud', error });
+        log.sync.error('lazy-load %s from cloud failed: %O', entityKey, err);
+      }
+    }
+
+    log.sync('lazy-load %s: not found in any tier', entityKey);
+  }
+
+  private emitEntityChangesFromBlob(
+    entityName: string,
+    blob: Record<string, unknown>,
+  ): void {
+    const entities = (blob[entityName] as Record<string, unknown> | undefined) ?? {};
+    const deletedSection = blob['deleted'] as Record<string, Record<string, unknown>> | undefined;
+    const tombstones = deletedSection?.[entityName] ?? {};
+    this.entityEventBus.emit({
+      entityName,
+      source: 'sync',
+      updates: Object.keys(entities),
+      deletes: Object.keys(tombstones),
+    });
+  }
+
+  private async deriveFilter(
+    source: SyncLocation,
+    target: SyncLocation,
+    tenant: Tenant | undefined,
+  ): Promise<PartitionFilter | undefined> {
+    const memoryInvolved = source === 'memory' || target === 'memory';
+    const cloudInvolved = source === 'cloud' || target === 'cloud';
+
+    if (memoryInvolved) {
+      return (entityName, partitionKey) =>
+        this.store.hasPartition(partitionBlobKey(entityName, partitionKey));
+    }
+    if (cloudInvolved) {
+      const localIndexes = await this.markerStore.getIndexes('local', this.localAdapter, tenant);
+      return (entityName, partitionKey) =>
+        hasPartitionIndex(localIndexes, entityName, partitionKey);
+    }
+    return undefined;
+  }
+
+  /** Invalidate cached markers for the persistent tiers a sync just wrote. */
+  private invalidateMarkers(
+    source: SyncLocation,
+    target: SyncLocation,
+    tenant: Tenant | undefined,
+  ): void {
+    for (const loc of new Set<SyncLocation>([source, target])) {
+      if (loc === 'local' || loc === 'cloud') {
+        this.markerStore.invalidate(loc, tenant);
+      }
+    }
+  }
+
   async dispose(): Promise<void> {
     this.stopScheduler();
     this.disposed = true;
+    this.markerStore.clear();
     for (const item of this.queue) {
-      item.reject(new Error('SyncEngine disposed'));
+      item.reject(new SyncError('SyncEngine disposed', { kind: 'sync-failed' }));
     }
     this.queue.length = 0;
     if (this.inFlight) {

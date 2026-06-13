@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { Hlc } from '@strata/hlc';
-import { resolveConflict, resolveEntityTombstone } from '@strata/sync';
+import type { Hlc } from '@/hlc';
+import { resolveConflict, resolveEntityTombstone } from '@/sync';
 
 describe('resolveConflict', () => {
   it('picks entity with higher timestamp', () => {

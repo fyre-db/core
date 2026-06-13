@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { migrateBlob, validateMigrations } from '@strata/schema/migration';
-import type { BlobMigration } from '@strata/schema/migration';
-import type { PartitionBlob } from '@strata/persistence';
+import { migrateBlob, validateMigrations } from '@/schema/migration';
+import type { BlobMigration } from '@/schema/migration';
+import type { PartitionBlob } from '@/persistence';
 
 describe('Schema migration', () => {
   describe('migrateBlob', () => {

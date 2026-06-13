@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
-import { Store } from '@strata/store';
+import { Store } from '@/store';
 import { DEFAULT_OPTIONS } from '../helpers';
-import { EventBus } from '@strata/reactive';
-import type { EntityEvent } from '@strata/reactive';
-import { defineEntity } from '@strata/schema';
-import { SingletonRepository } from '@strata/repo';
-import type { Hlc } from '@strata/hlc';
+import { EventBus } from '@/reactive';
+import type { EntityEvent } from '@/reactive';
+import { defineEntity } from '@/schema';
+import { SingletonRepository } from '@/repo';
+import type { Hlc } from '@/hlc';
 
 type Settings = { theme: string; language: string };
 

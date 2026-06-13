@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile, unlink, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { StorageAdapter, Tenant } from 'strata-data-sync';
+import type { StorageAdapter, Tenant } from '@fyre-db/core';
 
 // ─── __dirname for ESM ───────────────────────────────────
 const __filename = fileURLToPath(import.meta.url);

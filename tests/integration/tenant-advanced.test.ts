@@ -1,24 +1,17 @@
-import { wrapAdapter } from '../helpers';
 import { describe, it, expect, afterEach } from 'vitest';
+import { firstValueFrom, filter } from 'rxjs';
 import {
-  Strata,
+  FyreDb,
   defineEntity,
   MemoryStorageAdapter,
-  saveTenantPrefs,
-  loadTenantPrefs,
-  pushTenantList,
-  pullTenantList,
-  loadTenantList,
-  resolveOptions,
-} from '@strata/index';
-import type { Tenant } from '@strata/index';
+} from '@/index';
 
 type Task = { title: string; done: boolean };
 
 const TaskDef = defineEntity<Task>('task');
 
 describe('Tenant advanced integration', () => {
-  const instances: Strata[] = [];
+  const instances: FyreDb[] = [];
 
   afterEach(async () => {
     for (const s of instances) {
@@ -27,82 +20,62 @@ describe('Tenant advanced integration', () => {
     instances.length = 0;
   });
 
-  function track(s: Strata): Strata {
+  function track(s: FyreDb): FyreDb {
     instances.push(s);
     return s;
   }
 
-  it('tenant preferences sync — save prefs on A, load on B via shared cloud', async () => {
-    const sharedCloud = wrapAdapter(new MemoryStorageAdapter());
-    const now = new Date();
-    const tenant: Tenant = { id: 'prefs-test', name: 'Test', encrypted: false, meta: { folder: 'shared' }, createdAt: now, updatedAt: now };
-
-    // Device A saves prefs to cloud
-    await saveTenantPrefs(sharedCloud, tenant, {
-      name: 'My Workspace',
-    });
-
-    // Device B loads prefs from cloud
-    const loaded = await loadTenantPrefs(sharedCloud, tenant);
-
-    expect(loaded).toBeDefined();
-    expect(loaded!.name).toBe('My Workspace');
-  });
-
   it('tenant list multi-device merge — A creates X, B creates Y, both end up with both', async () => {
-    const sharedCloudRaw = new MemoryStorageAdapter();
-    const localARaw = new MemoryStorageAdapter();
-    const localBRaw = new MemoryStorageAdapter();
+    // A single shared cloud adapter stands in for the common remote storage two
+    // devices both sync their tenant list through. The TenantListManager merges
+    // local and cloud lists on construction, so each device converges on both.
+    const sharedCloud = new MemoryStorageAdapter();
+    const localA = new MemoryStorageAdapter();
+    const localB = new MemoryStorageAdapter();
 
-    const sharedCloud = wrapAdapter(sharedCloudRaw);
-    const localADa = wrapAdapter(localARaw);
-    const localBDa = wrapAdapter(localBRaw);
-
-    // Device A creates tenant X
-    const strataA = track(new Strata({
+    // Device A creates tenant X — persisted to localA and the shared cloud.
+    const fyredbA = track(new FyreDb({
       appId: 'test',
       entities: [TaskDef],
-      localAdapter: localARaw,
+      localAdapter: localA,
+      cloudAdapter: sharedCloud,
       deviceId: 'dev-A',
     }));
-    await strataA.tenants.create({ name: 'Tenant X', meta: { b: 'x' } });
+    await fyredbA.tenants.create({ name: 'Tenant X', meta: { b: 'x' } });
 
-    // Device B creates tenant Y
-    const strataB = track(new Strata({
+    // Device B comes online with the same shared cloud → init merges X in,
+    // then creates Y → the shared cloud ends up with both.
+    const fyredbB = track(new FyreDb({
       appId: 'test',
       entities: [TaskDef],
-      localAdapter: localBRaw,
+      localAdapter: localB,
+      cloudAdapter: sharedCloud,
       deviceId: 'dev-B',
     }));
-    await strataB.tenants.create({ name: 'Tenant Y', meta: { b: 'y' } });
+    await firstValueFrom(
+      fyredbB.tenants.tenants$.pipe(filter(ts => ts.some(t => t.name === 'Tenant X'))),
+    );
+    await fyredbB.tenants.create({ name: 'Tenant Y', meta: { b: 'y' } });
 
-    const opts = resolveOptions();
+    // Device A reconnects with a fresh instance → init merges cloud [X, Y].
+    const fyredbA2 = track(new FyreDb({
+      appId: 'test',
+      entities: [TaskDef],
+      localAdapter: localA,
+      cloudAdapter: sharedCloud,
+      deviceId: 'dev-A',
+    }));
 
-    // A pushes → cloud = [X]
-    await pushTenantList(localADa, sharedCloud, opts);
+    const listA = await firstValueFrom(
+      fyredbA2.tenants.tenants$.pipe(filter(ts => ts.length === 2)),
+    );
+    const listB = fyredbB.tenants.tenants;
 
-    // B pulls → B merges local [Y] with cloud [X] → B has [X, Y]
-    await pullTenantList(localBDa, sharedCloud, opts);
-
-    // B pushes → cloud = [X, Y]
-    await pushTenantList(localBDa, sharedCloud, opts);
-
-    // A pulls → A merges local [X] with cloud [X, Y] → A has [X, Y]
-    await pullTenantList(localADa, sharedCloud, opts);
-
-    // Both should have both tenants
-    const listA = await loadTenantList(localADa, opts);
-    const listB = await loadTenantList(localBDa, opts);
-
-    expect(listA).toHaveLength(2);
-    expect(listB).toHaveLength(2);
-
-    const namesA = listA.map(t => t.name).sort();
-    const namesB = listB.map(t => t.name).sort();
-    expect(namesA).toEqual(['Tenant X', 'Tenant Y']);
-    expect(namesB).toEqual(['Tenant X', 'Tenant Y']);
+    expect(listA.map(t => t.name).sort()).toEqual(['Tenant X', 'Tenant Y']);
+    expect([...listB].map(t => t.name).sort()).toEqual(['Tenant X', 'Tenant Y']);
   });
 });
+
 
 
 

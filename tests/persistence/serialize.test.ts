@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { serialize, deserialize } from '@strata/utils';
+import { serialize, deserialize } from '@/utils';
 
 describe('Serialization', () => {
   it('round-trips plain data without Dates', () => {

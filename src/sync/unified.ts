@@ -1,19 +1,19 @@
-import debug from 'debug';
-import type { Tenant } from '@strata/adapter';
-import { partitionBlobKey } from '@strata/adapter';
-import type { Hlc } from '@strata/hlc';
-import { compareHlc } from '@strata/hlc';
-import type { AllIndexes, PartitionBlob, DataAdapter } from '@strata/persistence';
-import { loadAllIndexes, saveAllIndexes } from '@strata/persistence';
-import { partitionHash, updatePartitionIndexEntry } from '@strata/persistence';
-import type { BlobMigration } from '@strata/schema/migration';
-import { migrateBlob } from '@strata/schema/migration';
-import type { ResolvedStrataOptions } from '../options';
+import type { Tenant } from '@/adapter';
+import { partitionBlobKey } from '@/adapter';
+import type { Hlc } from '@/hlc';
+import { compareHlc } from '@/hlc';
+import type { AllIndexes, PartitionBlob, PartitionIndex, PartitionIndexEntry, DataAdapter } from '@/persistence';
+import { loadAllIndexes, saveAllIndexes } from '@/persistence';
+import { partitionHash, updatePartitionIndexEntry } from '@/persistence';
+import type { BlobMigration } from '@/schema/migration';
+import { migrateBlob } from '@/schema/migration';
+import type { ResolvedFyreDbOptions } from '../options';
 import { diffPartitions } from './diff';
 import { mergePartition } from './merge';
 import type { SyncEntity, SyncEntityChange, SyncBetweenResult } from './types';
+import { log } from '@/log';
 
-const log = debug('strata:sync');
+export type PartitionFilter = (entityName: string, partitionKey: string) => boolean;
 
 type SyncChange = {
   readonly entityName: string;
@@ -30,25 +30,44 @@ type SyncPlan = {
 
 // ─── Phase 1: Build plan ─────────────────────────────────
 
+function filterIndex(
+  index: PartitionIndex,
+  entityName: string,
+  partitionFilter: PartitionFilter,
+): PartitionIndex {
+  const filtered: PartitionIndex = {};
+  for (const key of Object.keys(index)) {
+    if (partitionFilter(entityName, key)) {
+      filtered[key] = index[key];
+    }
+  }
+  return filtered;
+}
+
 async function buildPlan(
   adapterA: DataAdapter,
   adapterB: DataAdapter,
   entityNames: ReadonlyArray<string>,
   tenant: Tenant | undefined,
+  options: ResolvedFyreDbOptions,
   migrations?: ReadonlyArray<BlobMigration>,
-  options?: ResolvedStrataOptions,
+  partitionFilter?: PartitionFilter,
 ): Promise<SyncPlan> {
   const [indexesA, indexesB] = await Promise.all([
-    loadAllIndexes(adapterA, tenant, options!),
-    loadAllIndexes(adapterB, tenant, options!),
+    loadAllIndexes(adapterA, tenant, options),
+    loadAllIndexes(adapterB, tenant, options),
   ]);
 
   const applyToA: SyncChange[] = [];
   const applyToB: SyncChange[] = [];
 
   for (const entityName of entityNames) {
-    const indexA = indexesA[entityName] ?? {};
-    const indexB = indexesB[entityName] ?? {};
+    let indexA = indexesA[entityName] ?? {};
+    let indexB = indexesB[entityName] ?? {};
+    if (partitionFilter) {
+      indexA = filterIndex(indexA, entityName, partitionFilter);
+      indexB = filterIndex(indexB, entityName, partitionFilter);
+    }
     const diff = diffPartitions(indexA, indexB);
 
     await planCopies(
@@ -113,7 +132,7 @@ async function planMerges(
       adapterB.read(tenant, key),
     ]);
     if (!blobA || !blobB) {
-      log('skipping merge for %s: missing blob', key);
+      log.sync('skipping merge for %s: missing blob', key);
       continue;
     }
     if (migrations) {
@@ -146,9 +165,9 @@ async function checkStale(
   adapter: DataAdapter,
   tenant: Tenant | undefined,
   snapshot: AllIndexes,
-  options?: ResolvedStrataOptions,
+  options: ResolvedFyreDbOptions,
 ): Promise<{ stale: boolean; currentIndexes: AllIndexes }> {
-  const current = await loadAllIndexes(adapter, tenant, options!);
+  const current = await loadAllIndexes(adapter, tenant, options);
   for (const entityName of Object.keys(snapshot)) {
     const snapIndex = snapshot[entityName] ?? {};
     const curIndex = current[entityName] ?? {};
@@ -156,7 +175,9 @@ async function checkStale(
       ...Object.keys(snapIndex), ...Object.keys(curIndex),
     ]);
     for (const key of allKeys) {
-      if (snapIndex[key]?.hash !== curIndex[key]?.hash) {
+      const snapEntry = snapIndex[key] as PartitionIndexEntry | undefined;
+      const curEntry = curIndex[key] as PartitionIndexEntry | undefined;
+      if (snapEntry?.hash !== curEntry?.hash) {
         return { stale: true, currentIndexes: current };
       }
     }
@@ -263,10 +284,11 @@ export async function syncBetween(
   adapterB: DataAdapter,
   entityNames: ReadonlyArray<string>,
   tenant: Tenant | undefined,
+  options: ResolvedFyreDbOptions,
   migrations?: ReadonlyArray<BlobMigration>,
-  options?: ResolvedStrataOptions,
+  partitionFilter?: PartitionFilter,
 ): Promise<SyncBetweenResult> {
-  const plan = await buildPlan(adapterA, adapterB, entityNames, tenant, migrations, options);
+  const plan = await buildPlan(adapterA, adapterB, entityNames, tenant, options, migrations, partitionFilter);
 
   if (plan.applyToB.length === 0 && plan.applyToA.length === 0) {
     return { changesForA: [], changesForB: [], stale: false, maxHlc: undefined };
@@ -284,14 +306,14 @@ export async function syncBetween(
   // Update indexes — each adapter only gets updates for changes actually written to it
   // Skip A index save when stale — another process may have updated A's indexes
   const indexUpdatesB = computeIndexUpdates(deduplicateChanges(plan.applyToB));
-  const existingIdxB = await loadAllIndexes(adapterB, tenant, options!);
+  const existingIdxB = await loadAllIndexes(adapterB, tenant, options);
   if (stale) {
-    await saveAllIndexes(adapterB, tenant, mergeIndexes(existingIdxB, indexUpdatesB), options!);
+    await saveAllIndexes(adapterB, tenant, mergeIndexes(existingIdxB, indexUpdatesB), options);
   } else {
     const indexUpdatesA = computeIndexUpdates(deduplicateChanges(plan.applyToA));
     await Promise.all([
-      saveAllIndexes(adapterA, tenant, mergeIndexes(existingIdxA, indexUpdatesA), options!),
-      saveAllIndexes(adapterB, tenant, mergeIndexes(existingIdxB, indexUpdatesB), options!),
+      saveAllIndexes(adapterA, tenant, mergeIndexes(existingIdxA, indexUpdatesA), options),
+      saveAllIndexes(adapterB, tenant, mergeIndexes(existingIdxB, indexUpdatesB), options),
     ]);
   }
 
@@ -299,7 +321,7 @@ export async function syncBetween(
   const allApplied = deduplicateChanges([...appliedToA, ...plan.applyToB]);
   const maxHlc = findMaxHlc(allApplied);
 
-  log(
+  log.sync(
     'syncBetween complete: %d→B, %d→A, stale=%s',
     plan.applyToB.length, stale ? 0 : plan.applyToA.length, stale,
   );

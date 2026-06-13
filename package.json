@@ -1,34 +1,44 @@
 {
-  "name": "strata-data-sync",
-  "version": "0.1.6",
-  "description": "`strata-data-sync`",
-  "homepage": "https://github.com/abhayjatindoshi/strata-data-sync#readme",
+  "name": "@fyre-db/core",
+  "version": "0.0.1",
+  "description": "Offline-first reactive data framework — the @fyre-db core",
+  "homepage": "https://github.com/fyre-db/core#readme",
   "bugs": {
-    "url": "https://github.com/abhayjatindoshi/strata-data-sync/issues"
+    "url": "https://github.com/fyre-db/core/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/abhayjatindoshi/strata-data-sync.git"
+    "url": "git+https://github.com/fyre-db/core.git"
   },
   "license": "MIT",
   "author": "Abhay Jatin Doshi <ajd1996@hotmail.com>",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json --resolve-full-paths",
-    "dev": "tsc -p tsconfig.build.json --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint .",
     "test": "vitest run"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/debug": "^4.1.13",
     "@types/node": "^25.5.0",
     "@vitest/coverage-v8": "^4.1.1",
-    "tsc-alias": "^1.8.16",
-    "typescript": "^5.9.3",
+    "eslint": "^10.2.1",
+    "tsup": "^8",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.59.1",
     "vitest": "^4.1.0"
   },
   "dependencies": {

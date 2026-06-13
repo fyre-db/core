@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { defineEntity, formatEntityId, partitioned } from '@strata/schema';
-import { generateId } from '@strata/utils';
+import { defineEntity, formatEntityId, partitioned } from '@/schema';
+import { generateId } from '@/utils';
 
 describe('Schema', () => {
   describe('generateId', () => {

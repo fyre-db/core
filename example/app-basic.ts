@@ -1,4 +1,4 @@
-import { Strata, defineEntity } from 'strata-data-sync';
+import { FyreDb, defineEntity } from '@fyre-db/core';
 import { FsStorageAdapter, tmpDirFor, cleanTmpDir } from './common';
 
 // ─── Define a Task entity ────────────────────────────────
@@ -13,8 +13,8 @@ async function main() {
 
   const storage = new FsStorageAdapter(dataDir);
 
-  // Create a Strata instance backed by file storage
-  const strata = new Strata({
+  // Create a FyreDb instance backed by file storage
+  const fyredb = new FyreDb({
     appId: 'demo',
     entities: [taskDef],
     localAdapter: storage,
@@ -22,10 +22,10 @@ async function main() {
   });
 
   // Create and load a tenant (required before any data operations)
-  const tenant = await strata.tenants.create({ name: 'My Workspace', meta: {} });
-  await strata.tenants.open(tenant.id);
+  const tenant = await fyredb.tenants.create({ name: 'My Workspace', meta: {} });
+  await fyredb.tenants.open(tenant.id);
 
-  const tasks = strata.repo(taskDef);
+  const tasks = fyredb.repo(taskDef);
 
   // ── Save ───────────────────────────────────────────────
   console.log('=== Save ===');
@@ -63,7 +63,7 @@ async function main() {
   console.log('Remaining tasks:', tasks.query().map(t => t.title));
 
   // ── Dispose ────────────────────────────────────────────
-  await strata.dispose();
+  await fyredb.dispose();
   console.log('\nDone!');
 }
 

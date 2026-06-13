@@ -4,7 +4,7 @@
  * undefined/null equality, and valuesEqual with non-Date types.
  */
 import { describe, it, expect } from 'vitest';
-import { compareValues, valuesEqual } from '@strata/utils/compare';
+import { compareValues, valuesEqual } from '@/utils/compare';
 
 describe('compareValues — coverage gaps', () => {
   it('returns 0 for two undefined values', () => {

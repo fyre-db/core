@@ -1,14 +1,15 @@
-export { Strata, validateEntityDefinitions } from './strata';
-export type { StrataConfig, StrataOptions, ResolvedStrataOptions } from './strata';
-export { resolveOptions } from './strata';
+export { FyreDb, validateEntityDefinitions } from './fyredb';
+export type { FyreDbConfig, FyreDbOptions, ResolvedFyreDbOptions } from './fyredb';
+export { resolveOptions } from './fyredb';
 
-export * from '@strata/hlc';
-export * from '@strata/adapter';
-export * from '@strata/schema';
-export * from '@strata/reactive';
-export * from '@strata/persistence';
-export * from '@strata/store';
-export * from '@strata/repo';
-export * from '@strata/tenant';
-export * from '@strata/sync';
-export * from '@strata/utils';
+export * from '@/hlc';
+export * from '@/adapter';
+export * from '@/schema';
+export * from '@/reactive';
+export * from '@/persistence';
+export * from '@/store';
+export * from '@/repo';
+export * from '@/tenant';
+export * from '@/sync';
+export * from '@/utils';
+export * from '@/errors';

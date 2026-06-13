@@ -2,21 +2,22 @@
 
 ## Overview
 
-A storage adapter is the bridge between Strata and your persistence layer. You implement the `StorageAdapter` interface — 4 methods, raw bytes in and out.
+A storage adapter is the bridge between fyre-db and your persistence layer. You implement the `StorageAdapter` interface — 3 methods, raw bytes in and out.
 
 ## `StorageAdapter` Interface
 
 ```typescript
 type StorageAdapter = {
-  readonly kind: 'storage';
   read(tenant: Tenant | undefined, key: string): Promise<Uint8Array | null>;
   write(tenant: Tenant | undefined, key: string, data: Uint8Array): Promise<void>;
   delete(tenant: Tenant | undefined, key: string): Promise<boolean>;
-  list(tenant: Tenant | undefined, prefix: string): Promise<string[]>;
+  deriveTenantId?(meta: Record<string, unknown>): string;  // optional
 };
 ```
 
-The framework handles serialization, encryption, and compression. Your adapter just stores and retrieves bytes.
+The framework handles serialization and encryption. Your adapter just stores and retrieves bytes.
+
+The optional `deriveTenantId` method generates deterministic tenant IDs from metadata — used for sharing (same cloud folder = same tenant ID across users).
 
 ## Tenant Scoping
 
@@ -44,10 +45,9 @@ const prefix = tenant ? (tenant.meta.bucket as string) : 'app-data';
 ```typescript
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { StorageAdapter, Tenant } from 'strata-data-sync';
+import type { StorageAdapter, Tenant } from '@fyre-db/core';
 
 class FsStorageAdapter implements StorageAdapter {
-  readonly kind = 'storage';
   constructor(private readonly rootDir: string) {}
 
   private resolvePath(tenant: Tenant | undefined, key: string): string {
@@ -79,50 +79,29 @@ class FsStorageAdapter implements StorageAdapter {
       return false;
     }
   }
-
-  async list(tenant: Tenant | undefined, prefix: string): Promise<string[]> {
-    const dir = path.dirname(this.resolvePath(tenant, prefix));
-    try {
-      const files = await fs.readdir(dir);
-      const base = prefix.includes('/') ? prefix.slice(0, prefix.lastIndexOf('/') + 1) : '';
-      return files.map(f => base + f).filter(f => f.startsWith(prefix));
-    } catch {
-      return [];
-    }
-  }
 }
 ```
 
 ## Usage
 
 ```typescript
-const strata = new Strata({
+const fyredb = new FyreDb({
   appId: 'my-app',
   entities: [taskDef],
-  localAdapter: new FsStorageAdapter('/data/strata'),
+  localAdapter: new FsStorageAdapter('/data/fyredb'),
   deviceId: 'device-1',
 });
 ```
 
-When a `StorageAdapter` is passed as `localAdapter`, the framework wraps it with `AdapterBridge` automatically. The bridge handles:
-- Serialization (`PartitionBlob` ↔ JSON ↔ `Uint8Array`)
-- Transform pipeline (encryption, compression)
+The framework wraps your `StorageAdapter` in an `EncryptedDataAdapter` which handles JSON serialization (`PartitionBlob` ↔ `Uint8Array`) and encryption (if an `EncryptionService` is configured).
 
-## `BlobAdapter` — Direct Interface
+## Built-in Adapters
 
-If your storage already handles serialization (e.g., a JSON-native database), implement `BlobAdapter` instead:
-
-```typescript
-type BlobAdapter = {
-  readonly kind: 'blob';
-  read(tenant: Tenant | undefined, key: string): Promise<PartitionBlob | null>;
-  write(tenant: Tenant | undefined, key: string, data: PartitionBlob): Promise<void>;
-  delete(tenant: Tenant | undefined, key: string): Promise<boolean>;
-  list(tenant: Tenant | undefined, prefix: string): Promise<string[]>;
-};
-```
-
-No `AdapterBridge` wrapping — no encryption/compression transforms. Use this for cloud adapters or when encryption isn't needed.
+| Adapter | Package | Storage | Use Case |
+|---------|---------|---------|----------|
+| `MemoryStorageAdapter` | `fyre-db/core` | In-memory `Map` | Testing, development |
+| `LocalStorageAdapter` | `fyre-db/plugins` | Browser `localStorage` | Browser local persistence |
+| `GoogleDriveAdapter` | `fyre-db/plugins` | Google Drive API v3 | Cloud sync |
 
 ## Key Naming
 
@@ -130,14 +109,14 @@ Keys the framework reads and writes:
 
 | Key | Scope | Contents |
 |---|---|---|
-| `__tenants` | `tenant: undefined` | Tenant list |
-| `__strata` | `tenant: Tenant` | Marker blob (indexes, metadata, DEK) |
-| `task.global` | `tenant: Tenant` | Partition blob for entity `task`, partition `global` |
-| `note.2026-03` | `tenant: Tenant` | Partition blob for entity `note`, partition `2026-03` |
+| `__tenants` | `tenant: undefined` | Tenant list blob |
+| `__fyredb` | `tenant: Tenant` | Marker blob (indexes, metadata, encrypted DEK) |
+| `task._` | `tenant: Tenant` | Partition blob: entity `task`, partition `_` (global) |
+| `transaction.2026-03` | `tenant: Tenant` | Partition blob: entity `transaction`, partition `2026-03` |
 
 ## Tips
 
 - **Return `null` from `read()` if the key doesn't exist** — don't throw
-- **`list()` should return keys matching the prefix** — used for partition discovery
 - **`delete()` returns `true` if something was deleted** — `false` if key didn't exist
-- **Thread safety** — multiple reads/writes may happen concurrently. Ensure your adapter handles this (file locks, atomic writes, etc.)
+- **Thread safety** — multiple reads/writes may happen concurrently. Ensure your adapter handles this if needed (file locks, atomic writes, etc.)
+- **No `list()` method needed** — the framework discovers partitions via indexes stored in the marker blob, not by listing keys
