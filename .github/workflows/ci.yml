@@ -26,9 +26,11 @@ jobs:
 
       - run: npm run build
 
-      # Packaging validation — green CI ⟹ publishable. Catches missing dist,
-      # wrong exports, bad files globs at PR time, not at the irreversible step.
-      - run: npm publish --dry-run --access public
+      # Packaging validation — green CI ⟹ publishable. Validates the exact
+      # tarball (files globs, exports, dist present) without contacting the
+      # registry, so it does not fail on the placeholder 0.0.0 version. The
+      # release workflow handles version-uniqueness separately.
+      - run: npm pack --dry-run
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
