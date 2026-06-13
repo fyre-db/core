@@ -309,6 +309,210 @@ describe('SyncEngine', () => {
     await syncP;
     await drainP;
   });
+
+  it('runs a local→local sync with no partition filter', async () => {
+    const { engine, local } = makeEngine();
+
+    // Seed local with a partition + index so the sync has something to scan.
+    await local.write(undefined, 'task._', {
+      task: { 'task._.a': { id: 'task._.a', hlc: { timestamp: 1, counter: 0, nodeId: 'n' } } },
+      deleted: { task: {} },
+    });
+    await saveAllIndexes(local, undefined, {
+      task: { '_': { hash: 1, count: 1, deletedCount: 0, updatedAt: 1 } },
+    }, DEFAULT_OPTIONS);
+
+    // Neither side is memory or cloud, so deriveFilter returns undefined.
+    const { result } = await engine.sync('local', 'local', undefined);
+    expect(result).toBeDefined();
+  });
+
+  it('drain yields while a sync is still running after the queue is cleared', async () => {
+    const { engine, store, local } = makeEngine();
+
+    store.setEntity('task._', 'task._.a1', {
+      id: 'task._.a1', title: 'T',
+      hlc: { timestamp: 1, counter: 0, nodeId: 'n' },
+    });
+
+    // Gate the first local read so the sync stays in flight (running) while we
+    // dispose — dispose empties the queue, leaving drain in the
+    // running && queue-empty state that yields to the event loop.
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const origRead = local.read.bind(local);
+    let gated = true;
+    local.read = async (tenant, key) => {
+      if (gated) { gated = false; await gate; }
+      return origRead(tenant, key);
+    };
+
+    const syncP = engine.sync('memory', 'local', undefined).catch(() => {});
+    const drainP = engine.drain();
+    const disposeP = engine.dispose();
+    release();
+
+    await Promise.all([syncP, drainP, disposeP]);
+  });
+
+  it('lazy-loads a cloud-only partition from the cloud tier', async () => {
+    const { engine, cloud, store, eventBus } = makeEngine({ cloud: true });
+    const changed: string[] = [];
+    eventBus.all$.subscribe(({ entityName }) => {
+      if (entityName) changed.push(entityName);
+    });
+
+    // Partition lives only in cloud — not in local or memory.
+    await cloud!.write(undefined, 'task._', {
+      task: { 'task._.c1': { id: 'task._.c1', hlc: { timestamp: 10, counter: 0, nodeId: 'cl' } } },
+      deleted: { task: {} },
+    });
+    await saveAllIndexes(cloud!, undefined, {
+      task: { '_': { hash: 5, count: 1, deletedCount: 0, updatedAt: 10 } },
+    }, DEFAULT_OPTIONS);
+
+    await engine.ensurePartition(undefined, 'task', '_');
+
+    expect(store.hasPartition('task._')).toBe(true);
+    expect(changed).toContain('task');
+  });
+
+  it('emits sync-failed when a cloud lazy-load read throws', async () => {
+    const { engine, cloud, syncEventBus } = makeEngine({ cloud: true });
+    const events: SyncEvent[] = [];
+    syncEventBus.all$.subscribe(e => events.push(e));
+
+    await saveAllIndexes(cloud!, undefined, {
+      task: { '_': { hash: 5, count: 1, deletedCount: 0, updatedAt: 10 } },
+    }, DEFAULT_OPTIONS);
+
+    const origRead = cloud!.read.bind(cloud!);
+    cloud!.read = async (tenant, key) => {
+      if (key === 'task._') throw new Error('cloud read failed');
+      return origRead(tenant, key);
+    };
+
+    // The cascade swallows the error after emitting sync-failed.
+    await engine.ensurePartition(undefined, 'task', '_');
+    expect(events.some(e => e.type === 'sync-failed')).toBe(true);
+  });
+
+  it('falls through when a cloud-indexed partition has no blob', async () => {
+    const { engine, cloud, store } = makeEngine({ cloud: true });
+
+    // Index claims the partition exists in cloud, but no blob was written.
+    await saveAllIndexes(cloud!, undefined, {
+      task: { '_': { hash: 5, count: 1, deletedCount: 0, updatedAt: 10 } },
+    }, DEFAULT_OPTIONS);
+
+    await engine.ensurePartition(undefined, 'task', '_');
+    expect(store.hasPartition('task._')).toBe(false);
+  });
+
+  it('falls through when a local-indexed partition has no blob', async () => {
+    const { engine, local, store } = makeEngine();
+
+    // Local marker claims the partition, but the blob itself is missing.
+    await saveAllIndexes(local, undefined, {
+      task: { '_': { hash: 7, count: 1, deletedCount: 0, updatedAt: 10 } },
+    }, DEFAULT_OPTIONS);
+
+    await engine.ensurePartition(undefined, 'task', '_');
+    expect(store.hasPartition('task._')).toBe(false);
+  });
+
+  it('falls through when the cloud marker does not list the partition', async () => {
+    const { engine, cloud, store } = makeEngine({ cloud: true });
+
+    // Cloud marker exists but only knows about a different partition.
+    await saveAllIndexes(cloud!, undefined, {
+      task: { 'other': { hash: 9, count: 1, deletedCount: 0, updatedAt: 10 } },
+    }, DEFAULT_OPTIONS);
+
+    await engine.ensurePartition(undefined, 'task', '_');
+    expect(store.hasPartition('task._')).toBe(false);
+  });
+
+  it('wraps a non-Error cloud lazy-load failure as a FyreDbError', async () => {
+    const { engine, cloud, syncEventBus } = makeEngine({ cloud: true });
+    const events: SyncEvent[] = [];
+    syncEventBus.all$.subscribe(e => events.push(e));
+
+    await saveAllIndexes(cloud!, undefined, {
+      task: { '_': { hash: 5, count: 1, deletedCount: 0, updatedAt: 10 } },
+    }, DEFAULT_OPTIONS);
+
+    const origRead = cloud!.read.bind(cloud!);
+    cloud!.read = async (tenant, key) => {
+      // Throw a non-Error value to exercise the String(err) wrapping branch.
+      if (key === 'task._') throw 'cloud string failure';
+      return origRead(tenant, key);
+    };
+
+    await engine.ensurePartition(undefined, 'task', '_');
+    const failed = events.find(e => e.type === 'sync-failed');
+    expect(failed).toBeDefined();
+  });
+
+  it('lazy-loads a cloud partition whose blob omits the entity and deleted sections', async () => {
+    const { engine, cloud, store, eventBus } = makeEngine({ cloud: true });
+    const changed: string[] = [];
+    eventBus.all$.subscribe(({ entityName }) => {
+      if (entityName) changed.push(entityName);
+    });
+
+    // Blob is present (so it loads) but carries neither the entity map nor a
+    // deleted section, exercising the ?? {} / ?. fallbacks when emitting.
+    await cloud!.write(undefined, 'task._', {} as unknown as Parameters<typeof cloud.write>[2]);
+    await saveAllIndexes(cloud!, undefined, {
+      task: { '_': { hash: 5, count: 0, deletedCount: 0, updatedAt: 10 } },
+    }, DEFAULT_OPTIONS);
+
+    await engine.ensurePartition(undefined, 'task', '_');
+
+    expect(store.hasPartition('task._')).toBe(true);
+    expect(changed).toContain('task');
+  });
+
+  it('emits one entity event when a sync moves two partitions of the same entity', async () => {
+    const { engine, store, local, eventBus } = makeEngine();
+    const taskEvents: { updates: string[] }[] = [];
+    eventBus.all$.subscribe(e => {
+      if (e.entityName === 'task') taskEvents.push({ updates: [...e.updates] });
+    });
+
+    // Memory and local diverge on two partitions of the same entity. Merging
+    // produces changes for both partitions, written back to memory — so
+    // emitEntityChanges reuses the single 'task' map entry across them.
+    store.setEntity('task._', 'task._.m1', {
+      id: 'task._.m1', hlc: { timestamp: 100, counter: 0, nodeId: 'mem' },
+    });
+    store.setEntity('task.2026-01', 'task.2026-01.m2', {
+      id: 'task.2026-01.m2', hlc: { timestamp: 110, counter: 0, nodeId: 'mem' },
+    });
+
+    await local.write(undefined, 'task._', {
+      task: { 'task._.l1': { id: 'task._.l1', hlc: { timestamp: 200, counter: 0, nodeId: 'loc' } } },
+      deleted: { task: {} },
+    });
+    await local.write(undefined, 'task.2026-01', {
+      task: { 'task.2026-01.l2': { id: 'task.2026-01.l2', hlc: { timestamp: 210, counter: 0, nodeId: 'loc' } } },
+      deleted: { task: {} },
+    });
+    await saveAllIndexes(local, undefined, {
+      task: {
+        '_': { hash: 901, count: 1, deletedCount: 0, updatedAt: 200 },
+        '2026-01': { hash: 902, count: 1, deletedCount: 0, updatedAt: 210 },
+      },
+    }, DEFAULT_OPTIONS);
+
+    await engine.sync('memory', 'local', undefined);
+
+    // Both diverged partitions collapse into a single 'task' event.
+    expect(taskEvents).toHaveLength(1);
+    expect(taskEvents[0].updates).toContain('task._.m1');
+    expect(taskEvents[0].updates).toContain('task.2026-01.m2');
+  });
 });
 
 describe('SyncEngine scheduler', () => {

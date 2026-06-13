@@ -7,6 +7,7 @@ import {
   partitioned,
 } from '@/index';
 import type { Repository, SingletonRepository } from '@/repo';
+import { waitForTenantInList } from '../helpers';
 
 type Task = { title: string; done: boolean };
 type Settings = { theme: string; fontSize: number };
@@ -60,6 +61,7 @@ describe('Full lifecycle integration', () => {
       localAdapter,
       deviceId: 'dev-1',
     }));
+    await waitForTenantInList(fyredb2.tenants.tenants$, tenant.id);
     await fyredb2.tenants.open(tenant.id);
 
     const repo2 = fyredb2.repo(TaskDef) as Repository<Task>;
@@ -102,6 +104,7 @@ describe('Full lifecycle integration', () => {
       localAdapter,
       deviceId: 'dev-1',
     }));
+    await waitForTenantInList(fyredb2.tenants.tenants$, tenant.id);
     await fyredb2.tenants.open(tenant.id);
     const repo2 = fyredb2.repo(TaskDef) as Repository<Task>;
     const all = await firstValueFrom(repo2.observeQuery().pipe(filter(arr => arr.length > 0)));
@@ -190,6 +193,7 @@ describe('Full lifecycle integration', () => {
       localAdapter,
       deviceId: 'dev-1',
     }));
+    await waitForTenantInList(fyredb2.tenants.tenants$, tenant.id);
     await fyredb2.tenants.open(tenant.id);
 
     const taskRepo2 = fyredb2.repo(TaskDef) as Repository<Task>;
@@ -228,6 +232,7 @@ describe('Full lifecycle integration', () => {
       localAdapter,
       deviceId: 'dev-1',
     }));
+    await waitForTenantInList(fyredb2.tenants.tenants$, tenant.id);
     await fyredb2.tenants.open(tenant.id);
 
     const repo2 = fyredb2.repo(EventDef) as Repository<Event>;

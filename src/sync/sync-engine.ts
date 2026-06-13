@@ -6,7 +6,7 @@ import type { EventBus } from '@/reactive';
 import type { EntityEvent } from '@/reactive';
 import type { EntityStore } from '@/store';
 import type { BlobMigration } from '@/schema/migration';
-import type { DataAdapter } from '@/persistence';
+import type { DataAdapter, AllIndexes } from '@/persistence';
 import { parseCompositeKey } from '@/utils';
 import type { ReactiveFlag } from '@/utils';
 import type { ResolvedFyreDbOptions } from '../options';
@@ -21,6 +21,17 @@ import { syncBetween } from './unified';
 import type { PartitionFilter } from './unified';
 import { MarkerStore } from './marker-store';
 import { log } from '@/log';
+
+/**
+ * Whether `indexes` records a partition for the given entity. Looks the entity
+ * up through a `| undefined` view because `AllIndexes` is a `Record` and (with
+ * `noUncheckedIndexedAccess` off) the indexed access is statically non-nullish
+ * even though a missing key is `undefined` at runtime.
+ */
+function hasPartitionIndex(indexes: AllIndexes, entityName: string, partitionKey: string): boolean {
+  const partition = indexes[entityName] as AllIndexes[string] | undefined;
+  return partition?.[partitionKey] !== undefined;
+}
 
 export class SyncEngine {
   private readonly queue: SyncQueueItem[] = [];
@@ -249,7 +260,7 @@ export class SyncEngine {
   ): Promise<void> {
     // Try local first
     const localIndexes = await this.markerStore.getIndexes('local', this.localAdapter, tenant);
-    if (localIndexes[entityName]?.[partitionKey]) {
+    if (hasPartitionIndex(localIndexes, entityName, partitionKey)) {
       const blob = await this.localAdapter.read(tenant, entityKey);
       if (blob) {
         await this.store.write(tenant, entityKey, blob);
@@ -263,7 +274,7 @@ export class SyncEngine {
     if (this.cloudAdapter) {
       try {
         const cloudIndexes = await this.markerStore.getIndexes('cloud', this.cloudAdapter, tenant);
-        if (cloudIndexes[entityName]?.[partitionKey]) {
+        if (hasPartitionIndex(cloudIndexes, entityName, partitionKey)) {
           const blob = await this.cloudAdapter.read(tenant, entityKey);
           if (blob) {
             await this.localAdapter.write(tenant, entityKey, blob);
@@ -313,7 +324,7 @@ export class SyncEngine {
     if (cloudInvolved) {
       const localIndexes = await this.markerStore.getIndexes('local', this.localAdapter, tenant);
       return (entityName, partitionKey) =>
-        !!(localIndexes[entityName]?.[partitionKey]);
+        hasPartitionIndex(localIndexes, entityName, partitionKey);
     }
     return undefined;
   }

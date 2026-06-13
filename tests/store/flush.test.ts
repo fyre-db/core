@@ -128,5 +128,33 @@ describe('loadPartitionFromAdapter', () => {
     expect(result.size).toBe(1);
     expect(store.getTombstones('task._').size).toBe(0);
   });
+
+  it('returns empty map when the deleted section for the entity is not an object', async () => {
+    const adapter = createDataAdapter();
+    const store = new Store(DEFAULT_OPTIONS);
+
+    // deleted is a plain object, but deleted[entityName] is a primitive — invalid
+    const malformed = { task: {}, deleted: { task: 'not-an-object' } };
+    await adapter.write(undefined, 'task._', malformed as any);
+
+    const result = await loadPartitionFromAdapter(adapter, undefined, store, 'task', '_');
+
+    expect(result.size).toBe(0);
+    expect(store.getTombstones('task._').size).toBe(0);
+  });
+
+  it('returns empty map when blob has no entity section at all', async () => {
+    const adapter = createDataAdapter();
+    const store = new Store(DEFAULT_OPTIONS);
+
+    // Valid blob, but missing the entity key entirely — entities falls back to {}
+    const blob = { deleted: {} };
+    await adapter.write(undefined, 'task._', blob as any);
+
+    const result = await loadPartitionFromAdapter(adapter, undefined, store, 'task', '_');
+
+    expect(result.size).toBe(0);
+    expect(store.getTombstones('task._').size).toBe(0);
+  });
 });
 

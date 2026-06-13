@@ -267,4 +267,21 @@ describe('mergePartition', () => {
     const result = mergePartition(local, cloud, entityName);
     expect(result.entities['task._.a1']).toBeDefined();
   });
+
+  it('falls back to empty maps when cloud entities and local tombstones are absent', () => {
+    // Cloud blob omits the 'task' entity key → cloudEntities ?? {} fallback.
+    // Local blob's deleted section omits 'task' → localTombstones ?? {} fallback.
+    const local: PartitionBlob = {
+      [entityName]: {
+        'task._.a': { id: 'task._.a', hlc: { timestamp: 1000, counter: 0, nodeId: 'n1' } },
+      },
+      deleted: {},
+    };
+    const cloud: PartitionBlob = { deleted: { [entityName]: {} } };
+
+    const result = mergePartition(local, cloud, entityName);
+
+    expect(result.entities['task._.a']).toBeDefined();
+    expect(Object.keys(result.tombstones)).toHaveLength(0);
+  });
 });

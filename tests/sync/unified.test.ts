@@ -200,6 +200,41 @@ describe('syncBetween', () => {
     expect(result.changesForA).toHaveLength(0);
   });
 
+  it('detects stale state when adapterA loses an entity from its marker mid-sync', async () => {
+    const adapterA = createDataAdapter();
+    const adapterB = createDataAdapter();
+
+    const entityA = { id: 'task._.a1', hlc: { timestamp: 1000, counter: 0, nodeId: 'n1' } };
+    const entityB = { id: 'task._.b1', hlc: { timestamp: 2000, counter: 0, nodeId: 'n2' } };
+
+    await adapterA.write(undefined, 'task._', makePartitionBlob('task', { 'task._.a1': entityA }));
+    await adapterB.write(undefined, 'task._', makePartitionBlob('task', { 'task._.b1': entityB }));
+
+    await saveAllIndexes(adapterA, undefined, {
+      task: { '_': { hash: 111, count: 1, deletedCount: 0, updatedAt: 1000 } },
+    }, DEFAULT_OPTIONS);
+    await saveAllIndexes(adapterB, undefined, {
+      task: { '_': { hash: 222, count: 1, deletedCount: 0, updatedAt: 2000 } },
+    }, DEFAULT_OPTIONS);
+
+    // During phase 2 (write to B), wipe A's marker entirely so the stale check
+    // re-reads A and finds the snapshot's entity missing from the current index.
+    const origWriteB = adapterB.write.bind(adapterB);
+    let intercepted = false;
+    adapterB.write = async (tenant, key, data) => {
+      await origWriteB(tenant, key, data);
+      if (!intercepted && key === 'task._') {
+        intercepted = true;
+        await saveAllIndexes(adapterA, undefined, {}, DEFAULT_OPTIONS);
+      }
+    };
+
+    const result = await syncBetween(adapterA, adapterB, ['task'], undefined, DEFAULT_OPTIONS);
+
+    expect(result.stale).toBe(true);
+    expect(result.changesForA).toHaveLength(0);
+  });
+
   it('skips merge when one side has missing blob for diverged partition', async () => {
     const adapterA = createDataAdapter();
     const adapterB = createDataAdapter();
@@ -422,5 +457,76 @@ describe('syncBetween', () => {
     const result = await syncBetween(adapterA, adapterB, ['task'], undefined, DEFAULT_OPTIONS);
     expect(result.changesForB.length).toBe(1);
     expect(result.maxHlc).toBeDefined();
+  });
+
+  it('skips merge when a diverged partition blob is missing on one side', async () => {
+    const adapterA = createDataAdapter();
+    const adapterB = createDataAdapter();
+
+    // Both indexes claim the partition with diverging hashes, so it is planned
+    // as a merge — but A's actual blob is missing (deleted between index and
+    // blob read), so planMerges must skip it instead of merging.
+    await adapterB.write(undefined, 'task._', makePartitionBlob('task', {
+      'task._.b1': { id: 'task._.b1', hlc: { timestamp: 2000, counter: 0, nodeId: 'n2' } },
+    }));
+    await saveAllIndexes(adapterA, undefined, {
+      task: { '_': { hash: 111, count: 1, deletedCount: 0, updatedAt: 1000 } },
+    }, DEFAULT_OPTIONS);
+    await saveAllIndexes(adapterB, undefined, {
+      task: { '_': { hash: 222, count: 1, deletedCount: 0, updatedAt: 2000 } },
+    }, DEFAULT_OPTIONS);
+
+    const result = await syncBetween(adapterA, adapterB, ['task'], undefined, DEFAULT_OPTIONS);
+
+    // Merge skipped → nothing applied to either side.
+    expect(result.changesForA).toHaveLength(0);
+    expect(result.changesForB).toHaveLength(0);
+  });
+
+  it('skips merge when the diverged blob is missing on the B side', async () => {
+    const adapterA = createDataAdapter();
+    const adapterB = createDataAdapter();
+
+    // A has the blob, B's blob is missing — exercises the `!blobB` branch.
+    await adapterA.write(undefined, 'task._', makePartitionBlob('task', {
+      'task._.a1': { id: 'task._.a1', hlc: { timestamp: 1000, counter: 0, nodeId: 'n1' } },
+    }));
+    await saveAllIndexes(adapterA, undefined, {
+      task: { '_': { hash: 111, count: 1, deletedCount: 0, updatedAt: 1000 } },
+    }, DEFAULT_OPTIONS);
+    await saveAllIndexes(adapterB, undefined, {
+      task: { '_': { hash: 222, count: 1, deletedCount: 0, updatedAt: 2000 } },
+    }, DEFAULT_OPTIONS);
+
+    const result = await syncBetween(adapterA, adapterB, ['task'], undefined, DEFAULT_OPTIONS);
+
+    expect(result.changesForA).toHaveLength(0);
+    expect(result.changesForB).toHaveLength(0);
+  });
+
+  it('computes maxHlc across both entities and tombstones in a merged blob', async () => {
+    const adapterA = createDataAdapter();
+    const adapterB = createDataAdapter();
+
+    // A holds an entity; B holds two tombstones — one older and one newer than
+    // the entity. After merge the blob carries the entity and both tombstones,
+    // so findMaxHlc sets max from the entity then compares each tombstone.
+    await adapterA.write(undefined, 'task._', makePartitionBlob('task', {
+      'task._.a': { id: 'task._.a', hlc: { timestamp: 5000, counter: 0, nodeId: 'n1' } },
+    }));
+    await adapterB.write(undefined, 'task._', makePartitionBlob('task', {}, {
+      'task._.older': { timestamp: 3000, counter: 0, nodeId: 'n2' },
+      'task._.newer': { timestamp: 7000, counter: 0, nodeId: 'n2' },
+    }));
+    await saveAllIndexes(adapterA, undefined, {
+      task: { '_': { hash: 111, count: 1, deletedCount: 0, updatedAt: 5000 } },
+    }, DEFAULT_OPTIONS);
+    await saveAllIndexes(adapterB, undefined, {
+      task: { '_': { hash: 222, count: 0, deletedCount: 2, updatedAt: 7000 } },
+    }, DEFAULT_OPTIONS);
+
+    const result = await syncBetween(adapterA, adapterB, ['task'], undefined, DEFAULT_OPTIONS);
+
+    expect(result.maxHlc).toEqual({ timestamp: 7000, counter: 0, nodeId: 'n2' });
   });
 });

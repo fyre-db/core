@@ -1,5 +1,6 @@
-import { wrapAdapter } from '../helpers';
+import { wrapAdapter, waitForTenantInList } from '../helpers';
 import { describe, it, expect, afterEach } from 'vitest';
+import { firstValueFrom, filter } from 'rxjs';
 import {
   FyreDb,
   defineEntity,
@@ -75,7 +76,9 @@ describe('Tenant integration', () => {
       deviceId: 'dev-1',
     }));
 
-    const list = await fyredb2.tenants.list();
+    const list = await firstValueFrom(
+      fyredb2.tenants.tenants$.pipe(filter(ts => ts.length === 2)),
+    );
     expect(list).toHaveLength(2);
     expect(list.map(t => t.name).sort()).toEqual(['WS1', 'WS2']);
   });
@@ -127,12 +130,12 @@ describe('Tenant integration', () => {
       meta: { bucket: 'delink' },
     });
 
-    let list = await fyredb.tenants.list();
+    let list = fyredb.tenants.tenants;
     expect(list).toHaveLength(1);
 
     await fyredb.tenants.remove(tenant.id);
 
-    list = await fyredb.tenants.list();
+    list = fyredb.tenants.tenants;
     expect(list).toHaveLength(0);
   });
 
@@ -168,8 +171,8 @@ describe('Tenant integration', () => {
     }));
 
     await expect(
-      fyredb.tenants.join({ meta: { folder: 'empty' } }),
-    ).rejects.toThrow('No fyredb workspace found');
+      fyredb.tenants.join({ name: 'Empty', meta: { folder: 'empty' } }),
+    ).rejects.toThrow('No workspace found at this location');
   });
 
   it('two devices share tenant via cloud adapter deriveTenantId', async () => {
@@ -236,7 +239,7 @@ describe('Tenant integration', () => {
 
     await fyredb.tenants.remove(tenant.id, { purge: true });
 
-    const list = await fyredb.tenants.list();
+    const list = fyredb.tenants.tenants;
     expect(list).toHaveLength(0);
   });
 });

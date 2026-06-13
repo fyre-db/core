@@ -1,3 +1,5 @@
+import { firstValueFrom, filter } from 'rxjs';
+import type { Observable } from 'rxjs';
 import { resolveOptions } from '@/options';
 import type { ResolvedFyreDbOptions } from '@/options';
 import { MemoryStorageAdapter, NOOP_ENCRYPTION_SERVICE, InvalidEncryptionKeyError } from '@/adapter';
@@ -5,7 +7,22 @@ import type { StorageAdapter, EncryptionService, EncryptionStrategy, EncryptionK
 import { EncryptedDataAdapter } from '@/persistence';
 import type { DataAdapter } from '@/persistence';
 import { TenantContext } from '@/tenant';
+import type { Tenant } from '@/tenant';
 import { toBase64, fromBase64 } from '@/utils';
+
+// ── Tenant hydration helper ──
+//
+// The tenant list loads asynchronously from the local adapter when a FyreDb
+// instance is constructed. `open()` looks the tenant up synchronously, so on a
+// freshly reloaded instance callers must wait for the list to hydrate before
+// opening a previously-persisted tenant. This mirrors how a real consumer would
+// observe `tenants$` after construction.
+export async function waitForTenantInList(
+  tenants$: Observable<readonly Tenant[]>,
+  tenantId: string,
+): Promise<void> {
+  await firstValueFrom(tenants$.pipe(filter(ts => ts.some(t => t.id === tenantId))));
+}
 
 // ── Inline crypto helpers (moved from @/utils to @fyre-db/plugins) ──
 

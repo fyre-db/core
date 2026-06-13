@@ -194,6 +194,14 @@ describe('EntityStore', () => {
       expect(store.getTombstones('task._').size).toBe(0);
     });
 
+    it('write handles blob without an entity section at all', async () => {
+      const store = new Store(DEFAULT_OPTIONS);
+      // No 'task' key — data[entityName] is undefined, falls back to {}
+      await store.write(undefined, 'task._', { deleted: { task: {} } } as any);
+      expect(store.getPartition('task._').size).toBe(0);
+      expect(store.getTombstones('task._').size).toBe(0);
+    });
+
     it('write ignores key without dot separator', async () => {
       const store = new Store(DEFAULT_OPTIONS);
       await store.write(undefined, 'nodot', { task: {}, deleted: {} });
@@ -270,6 +278,22 @@ describe('EntityStore', () => {
       const system = (blob as Record<string, unknown>)['__system'] as Record<string, unknown>;
       const marker = system['marker'] as { indexes: Record<string, Record<string, unknown>> };
       expect(marker.indexes['task']).toBeDefined();
+    });
+
+    it('buildMarkerBlob skips partition keys that cannot be parsed', async () => {
+      const store = new Store(DEFAULT_OPTIONS);
+      // A key without a dot separator cannot be parsed into entity/partition.
+      store.setEntity('nodotkey', 'id1', { id: 'id1' });
+      store.setEntity('task._', 'id2', { id: 'id2' });
+
+      const blob = await store.read(undefined, DEFAULT_OPTIONS.markerKey);
+
+      expect(blob).not.toBeNull();
+      const system = (blob as Record<string, unknown>)['__system'] as Record<string, unknown>;
+      const marker = system['marker'] as { indexes: Record<string, Record<string, unknown>> };
+      // The parseable key is indexed; the unparseable one is silently skipped.
+      expect(marker.indexes['task']).toBeDefined();
+      expect(marker.indexes['nodotkey']).toBeUndefined();
     });
   });
 });

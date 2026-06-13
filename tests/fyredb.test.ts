@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { firstValueFrom, filter } from 'rxjs';
 import {
   FyreDb,
+  FyreDbError,
   validateEntityDefinitions,
   defineEntity,
   MemoryStorageAdapter,
@@ -10,7 +11,7 @@ import {
 } from '@/index';
 import type { SyncEvent } from '@/index';
 import type { Repository, SingletonRepository } from '@/repo';
-import { createTestEncryptionService } from './helpers';
+import { createTestEncryptionService, waitForTenantInList } from './helpers';
 
 type Task = { title: string; done: boolean };
 type Settings = { theme: string };
@@ -202,12 +203,14 @@ describe('FyreDb', () => {
   describe('tenants', () => {
     it('exposes tenant manager', () => {
       ({ fyredb } = makeFyreDb());
-      expect(fyredb.tenants.list).toBeTypeOf('function');
+      expect(fyredb.tenants.probe).toBeTypeOf('function');
       expect(fyredb.tenants.create).toBeTypeOf('function');
       expect(fyredb.tenants.open).toBeTypeOf('function');
       expect(fyredb.tenants.join).toBeTypeOf('function');
+      expect(fyredb.tenants.close).toBeTypeOf('function');
       expect(fyredb.tenants.remove).toBeTypeOf('function');
       expect(fyredb.tenants.changeCredential).toBeTypeOf('function');
+      expect(fyredb.tenants.tenants$).toBeDefined();
       expect(fyredb.tenants.activeTenant$).toBeDefined();
     });
 
@@ -492,6 +495,67 @@ describe('FyreDb', () => {
       fyredb.observe('tenant').subscribe(v => values.push(v));
       expect(values.length).toBeGreaterThan(0);
     });
+
+    it('observe("error") re-emits sync FyreDbErrors on the error channel', async () => {
+      const cloudAdapter = makeAdapter();
+      const taskDef = defineEntity<Task>('task');
+      fyredb = new FyreDb({
+        appId: 'test',
+        entities: [taskDef],
+        localAdapter: makeAdapter(),
+        cloudAdapter,
+        deviceId: 'dev',
+      });
+
+      const errors: FyreDbError[] = [];
+      fyredb.observe('error').subscribe(e => errors.push(e));
+
+      const tenant = await fyredb.tenants.create({
+        name: 'Test',
+        meta: { bucket: 'test' },
+      });
+      await fyredb.tenants.open(tenant.id);
+
+      // A typed FyreDbError from the cloud adapter is preserved by the sync
+      // engine and re-emitted onto the error channel.
+      const boom = new FyreDbError('Boom', { kind: 'unknown' });
+      cloudAdapter.read = () => { throw boom; };
+
+      await expect(fyredb.tenants.sync()).rejects.toThrow('Boom');
+
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0]).toBeInstanceOf(FyreDbError);
+      expect(errors.some(e => e === boom)).toBe(true);
+    });
+
+    it('observe("error") does not re-emit plain (non-FyreDbError) sync errors', async () => {
+      const cloudAdapter = makeAdapter();
+      const taskDef = defineEntity<Task>('task');
+      fyredb = new FyreDb({
+        appId: 'test',
+        entities: [taskDef],
+        localAdapter: makeAdapter(),
+        cloudAdapter,
+        deviceId: 'dev',
+      });
+
+      const errors: FyreDbError[] = [];
+      fyredb.observe('error').subscribe(e => errors.push(e));
+
+      const tenant = await fyredb.tenants.create({
+        name: 'Test',
+        meta: { bucket: 'test' },
+      });
+      await fyredb.tenants.open(tenant.id);
+
+      // A plain Error is reported as a sync-failed event but is NOT a
+      // FyreDbError, so the error channel stays silent.
+      cloudAdapter.read = () => { throw new Error('plain failure'); };
+
+      await expect(fyredb.tenants.sync()).rejects.toThrow('plain failure');
+
+      expect(errors).toHaveLength(0);
+    });
   });
 
   describe('sync events', () => {
@@ -694,6 +758,7 @@ describe('FyreDb', () => {
         encryptionService: encService2,
         deviceId: 'dev',
       });
+      await waitForTenantInList(fyredb2.tenants.tenants$, tenant.id);
       await fyredb2.tenants.open(tenant.id, { credential: 'newpass' });
       const repo2 = fyredb2.repo(taskDef) as Repository<Task>;
       const tasks = await firstValueFrom(repo2.observeQuery().pipe(filter(arr => arr.length > 0)));

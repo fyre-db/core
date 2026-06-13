@@ -1,5 +1,6 @@
-import { wrapAdapter } from '../helpers';
+import { wrapAdapter, waitForTenantInList } from '../helpers';
 import { describe, it, expect, afterEach } from 'vitest';
+import { firstValueFrom, filter } from 'rxjs';
 import {
   FyreDb,
   defineEntity,
@@ -61,10 +62,13 @@ describe('Persistence round-trip integration', () => {
       localAdapter,
       deviceId: 'dev-1',
     }));
+    await waitForTenantInList(fyredb2.tenants.tenants$, tenant.id);
     await fyredb2.tenants.open(tenant.id);
 
     const repo2 = fyredb2.repo(TransactionDef) as Repository<Transaction>;
-    const loaded = repo2.get(id);
+    const loaded = await firstValueFrom(
+      repo2.observe(id).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)),
+    );
 
     expect(loaded).toBeDefined();
     expect(loaded!.date).toBeInstanceOf(Date);
@@ -191,10 +195,13 @@ describe('Persistence round-trip integration', () => {
       localAdapter,
       deviceId: 'dev-1',
     }));
+    await waitForTenantInList(fyredb2.tenants.tenants$, tenant.id);
     await fyredb2.tenants.open(tenant.id);
 
     const repo2 = fyredb2.repo(ItemDef) as Repository<Item>;
-    const loaded = repo2.get(id);
+    const loaded = await firstValueFrom(
+      repo2.observe(id).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)),
+    );
     expect(loaded?.version).toBe(3);
     expect(loaded?.name).toBe('Widget v3');
   });

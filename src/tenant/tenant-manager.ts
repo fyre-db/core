@@ -16,7 +16,7 @@ import type {
 } from './types';
 import type { TenantContext } from './tenant-context';
 import { TenantListManager } from './tenant-list-manager';
-import { writeMarkerBlob, readMarkerBlob } from './marker-blob';
+import { writeMarkerBlob, readMarkerBlob, validateMarkerBlob } from './marker-blob';
 import { TenantError } from './errors';
 import { SyncError } from '@/sync/errors';
 import { log } from '@/log';
@@ -155,6 +155,23 @@ export class TenantManager implements TenantManagerType {
         this.deps.tenantContext.clear();
       }
     } else {
+      // Join: validate the existing marker's version when it is readable
+      // (unencrypted). Encrypted markers can't be read without a credential,
+      // so their version is validated after open() decrypts them.
+      if (!encrypted) {
+        let marker;
+        try {
+          marker = await readMarkerBlob(this.deps.adapter, tenant, this.deps.options);
+        } catch {
+          marker = undefined;
+        }
+        if (marker && !validateMarkerBlob(marker)) {
+          throw new TenantError(
+            `Incompatible workspace version: ${String(marker.version)}`,
+            { kind: 'workspace-incompatible' },
+          );
+        }
+      }
       await this.tenantList.add(tenant);
     }
 

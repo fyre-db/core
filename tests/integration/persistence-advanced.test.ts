@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { firstValueFrom, filter } from 'rxjs';
 import {
   FyreDb,
   defineEntity,
@@ -7,6 +8,7 @@ import {
 } from '@/index';
 import type { StorageAdapter } from '@/index';
 import type { Repository } from '@/repo';
+import { waitForTenantInList } from '../helpers';
 
 type Item = { name: string; category: string };
 type Transaction = { amount: number; date: Date; accountId: string };
@@ -79,10 +81,13 @@ describe('Persistence advanced integration', () => {
       localAdapter: transformedAdapter,
       deviceId: 'dev-1',
     }));
+    await waitForTenantInList(fyredb2.tenants.tenants$, tenant.id);
     await fyredb2.tenants.open(tenant.id);
 
     const repo2 = fyredb2.repo(ItemDef) as Repository<Item>;
-    const loaded = repo2.get(id);
+    const loaded = await firstValueFrom(
+      repo2.observe(id).pipe(filter((e): e is NonNullable<typeof e> => e !== undefined)),
+    );
     expect(loaded).toBeDefined();
     expect(loaded!.name).toBe('Secret');
     expect(loaded!.category).toBe('classified');
