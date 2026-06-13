@@ -15,12 +15,20 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: 24
+          registry-url: https://registry.npmjs.org
 
-      - run: npm ci
+      - run: npm install
+
+      - run: npm run lint
 
       - run: npx vitest run --coverage --reporter=default --reporter=json --outputFile=test-results.json
+
+      - run: npm run build
+
+      # Packaging validation — green CI ⟹ publishable. Catches missing dist,
+      # wrong exports, bad files globs at PR time, not at the irreversible step.
+      - run: npm publish --dry-run --access public
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
