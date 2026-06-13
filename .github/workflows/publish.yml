@@ -1,16 +1,17 @@
 name: Release & Publish
 
 # Manually triggered release for @fyre-db/core.
-# You provide the version + release notes; this workflow validates, bumps
-# package.json on main, tags, publishes to npm (with provenance), and creates
-# the GitHub Release — all with the correct version in every place.
+# You provide the version + release notes; this workflow validates, publishes to
+# npm (with provenance), tags the current main commit, and creates the GitHub
+# Release. The version bump is *ephemeral* — package.json is bumped only inside
+# the runner for the publish; it is never committed back to main. The git tag is
+# the source of truth for the released version. main/package.json stays at the
+# placeholder 0.0.0.
 #
 # Requirements:
 #   - Runs only from `main`.
-#   - secrets.RELEASE_TOKEN: a GitHub App installation token (or fine-grained
-#     PAT) allowed to push to `main` via a branch-protection bypass. The default
-#     GITHUB_TOKEN cannot push to a protected branch.
 #   - npm Trusted Publishing (OIDC) configured for @fyre-db/core (no npm token).
+#   - No push to a protected branch — no secret/PAT/bypass needed.
 
 on:
   workflow_dispatch:
@@ -26,7 +27,7 @@ on:
 
 permissions:
   id-token: write # OIDC for npm provenance
-  contents: write # create tag + GitHub Release (push uses RELEASE_TOKEN)
+  contents: write # create the git tag + GitHub Release (no branch push)
 
 concurrency:
   group: release-${{ github.ref }}
@@ -42,7 +43,6 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Validate version input
         run: |
@@ -80,24 +80,19 @@ jobs:
       - run: npm run lint
       - run: npm run test
       - run: npm run build
+
+      - name: Ephemeral version bump (runner-only, not committed)
+        run: npm version "$VERSION" --no-git-tag-version
+
       - run: npm publish --dry-run --access public
-
-      - name: Bump version on main
-        run: |
-          npm version "$VERSION" --no-git-tag-version
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json 2>/dev/null || git add package.json
-          git commit -m "chore(release): v${VERSION}"
-          git push origin main
-
-      - name: Tag the release commit
-        run: |
-          git tag "v${VERSION}"
-          git push origin "v${VERSION}"
 
       - name: Publish to npm
         run: npm publish --provenance --access public
+
+      - name: Tag the released main commit
+        run: |
+          git tag "v${VERSION}"
+          git push origin "v${VERSION}"
 
       - name: Create GitHub Release
         env:
@@ -109,4 +104,5 @@ jobs:
             --target main \
             --title "v${VERSION}" \
             --notes "$NOTES"
+
 

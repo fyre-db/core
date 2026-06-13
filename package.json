@@ -1,6 +1,6 @@
 {
   "name": "@fyre-db/core",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "description": "Offline-first reactive data framework — the @fyre-db core",
   "homepage": "https://github.com/fyre-db/core#readme",
   "bugs": {
