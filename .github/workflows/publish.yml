@@ -97,12 +97,17 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          # Pass notes via env (not inline) so backticks/quotes/newlines in the
+          # markdown are never interpreted by the shell.
+          RELEASE_NOTES: ${{ inputs.notes }}
         run: |
-          NOTES="${{ inputs.notes }}"
-          if [ -z "$NOTES" ]; then NOTES="Release v${VERSION}"; fi
+          if [ -z "$RELEASE_NOTES" ]; then
+            RELEASE_NOTES="Release v${VERSION}"
+          fi
+          printf '%s' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
           gh release create "v${VERSION}" \
             --target main \
             --title "v${VERSION}" \
-            --notes "$NOTES"
+            --notes-file "$RUNNER_TEMP/release-notes.md"
 
 
