@@ -86,7 +86,7 @@ describe('Full lifecycle integration', () => {
       entities: [TaskDef],
       localAdapter,
       deviceId: 'dev-1',
-      options: { localFlushIntervalMs: 60000 }, // Long debounce to ensure data isn't flushed before dispose
+      options: { localFlushDebounceMs: 60000, localFlushMaxWaitMs: 60000 }, // Long debounce to ensure data isn't flushed before dispose
     }));
     const tenant = await fyredb.tenants.create({ name: 'W', meta });
     await fyredb.tenants.open(tenant.id);

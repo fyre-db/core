@@ -328,8 +328,11 @@ describe('Multi-tenant parallel sync integration', () => {
       cloudAdapter: sharedCloud,
       deviceId: 'dev-1',
       options: {
-        localFlushIntervalMs: 50,
-        cloudSyncIntervalMs: 100,
+        localFlushDebounceMs: 20,
+        localFlushMaxWaitMs: 50,
+        cloudSyncDebounceMs: 20,
+        cloudSyncMaxWaitMs: 50,
+        cloudPullIntervalMs: 100,
       },
     }));
 

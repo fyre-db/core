@@ -103,8 +103,11 @@ const fyredb = new FyreDb({
   encryptionService: myEncryption,    // optional — enables per-tenant encryption
   migrations: [...],                  // optional — blob migrations
   options: {
-    localFlushIntervalMs: 2000,       // memory → local flush interval (default: 2s)
-    cloudSyncIntervalMs: 300000,      // local → cloud sync interval (default: 5m)
+    localFlushDebounceMs: 500,        // memory → local, after edits settle (default: 500ms)
+    localFlushMaxWaitMs: 3000,        // local flush ceiling during sustained edits (default: 3s)
+    cloudSyncDebounceMs: 10000,       // cloud sync, after edits settle (default: 10s)
+    cloudSyncMaxWaitMs: 60000,        // cloud sync ceiling (default: 60s)
+    cloudPullIntervalMs: 300000,      // periodic pull backstop (default: 5m)
     tombstoneRetentionMs: 604800000,  // tombstone TTL (default: 7 days)
   },
 });

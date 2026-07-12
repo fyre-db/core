@@ -143,9 +143,13 @@ export class FyreDb {
       rawCloudAdapter: config.cloudAdapter,
     });
 
+    // `isDirty` means "changes not yet in the cloud". Without a cloud adapter,
+    // the periodic memory→local flush is the durable save, so there is nothing
+    // to be pending against — never set the flag in local-only mode.
+    const hasCloud = cloudAdapter !== undefined;
     this.dirtySubscription = this.eventBus.all$.pipe(
       filter(e => e.source !== 'sync'),
-    ).subscribe(() => { this.dirtyTracker.set(); });
+    ).subscribe(() => { if (hasCloud) this.dirtyTracker.set(); });
 
     // Re-emit sync errors that are FyreDbErrors onto the errorBus so consumers
     // get a single channel for all data-op errors regardless of source.

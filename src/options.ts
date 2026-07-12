@@ -1,6 +1,9 @@
 export type FyreDbOptions = {
-  readonly cloudSyncIntervalMs?: number;
-  readonly localFlushIntervalMs?: number;
+  readonly localFlushDebounceMs?: number;
+  readonly localFlushMaxWaitMs?: number;
+  readonly cloudSyncDebounceMs?: number;
+  readonly cloudSyncMaxWaitMs?: number;
+  readonly cloudPullIntervalMs?: number;
   readonly tombstoneRetentionMs?: number;
   readonly tenantKey?: string;
   readonly markerKey?: string;
@@ -22,13 +25,36 @@ export function resolveOptions(opts?: FyreDbOptions): ResolvedFyreDbOptions {
   if (tombstoneRetentionMs < 0 || !Number.isFinite(tombstoneRetentionMs)) {
     throw new FyreDbConfigError(`Invalid tombstoneRetentionMs: ${tombstoneRetentionMs}. Must be a finite non-negative number.`);
   }
-  const cloudSyncIntervalMs = opts?.cloudSyncIntervalMs ?? 300_000;
-  validatePositiveInterval('cloudSyncIntervalMs', cloudSyncIntervalMs);
-  const localFlushIntervalMs = opts?.localFlushIntervalMs ?? 2_000;
-  validatePositiveInterval('localFlushIntervalMs', localFlushIntervalMs);
+
+  // Local flush: memory → local, edit-driven (debounce + ceiling).
+  const localFlushDebounceMs = opts?.localFlushDebounceMs ?? 500;
+  validatePositiveInterval('localFlushDebounceMs', localFlushDebounceMs);
+  const localFlushMaxWaitMs = opts?.localFlushMaxWaitMs ?? 3_000;
+  validatePositiveInterval('localFlushMaxWaitMs', localFlushMaxWaitMs);
+  if (localFlushMaxWaitMs < localFlushDebounceMs) {
+    throw new FyreDbConfigError(`localFlushMaxWaitMs (${localFlushMaxWaitMs}) must be >= localFlushDebounceMs (${localFlushDebounceMs}).`);
+  }
+
+  // Cloud sync: local ↔ cloud, edit-driven (debounce + ceiling).
+  const cloudSyncDebounceMs = opts?.cloudSyncDebounceMs ?? 10_000;
+  validatePositiveInterval('cloudSyncDebounceMs', cloudSyncDebounceMs);
+  const cloudSyncMaxWaitMs = opts?.cloudSyncMaxWaitMs ?? 60_000;
+  validatePositiveInterval('cloudSyncMaxWaitMs', cloudSyncMaxWaitMs);
+  if (cloudSyncMaxWaitMs < cloudSyncDebounceMs) {
+    throw new FyreDbConfigError(`cloudSyncMaxWaitMs (${cloudSyncMaxWaitMs}) must be >= cloudSyncDebounceMs (${cloudSyncDebounceMs}).`);
+  }
+
+  // Cloud pull: periodic backstop that fetches remote changes when this device
+  // is idle (no local edits to trigger an edit-driven cloud sync).
+  const cloudPullIntervalMs = opts?.cloudPullIntervalMs ?? 300_000;
+  validatePositiveInterval('cloudPullIntervalMs', cloudPullIntervalMs);
+
   return {
-    cloudSyncIntervalMs,
-    localFlushIntervalMs,
+    localFlushDebounceMs,
+    localFlushMaxWaitMs,
+    cloudSyncDebounceMs,
+    cloudSyncMaxWaitMs,
+    cloudPullIntervalMs,
     tombstoneRetentionMs,
     tenantKey: opts?.tenantKey ?? '__tenants',
     markerKey: opts?.markerKey ?? '__fyredb',
