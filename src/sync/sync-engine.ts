@@ -17,7 +17,7 @@ import { FyreDbError } from '@/errors';
 import type {
   SyncLocation, SyncQueueItem, SyncEvent,
   SyncEnqueueResult, SyncBetweenResult,
-  SyncEntityChange,
+  SyncEntityChange, SyncResult,
 } from './types';
 import { syncBetween } from './unified';
 import type { PartitionFilter } from './unified';
@@ -222,12 +222,12 @@ export class SyncEngine {
 
     if (hasCloud) {
       this.cloudDebouncer = new Debouncer(
-        () => { this.runCloudCycle(tenant, dirtyTracker); },
+        () => { void this.runCloudCycle(tenant, dirtyTracker).catch(() => {}); },
         this.options.cloudSyncDebounceMs,
         this.options.cloudSyncMaxWaitMs,
       );
       this.cloudTimer = setInterval(() => {
-        this.runCloudCycle(tenant, dirtyTracker);
+        void this.runCloudCycle(tenant, dirtyTracker).catch(() => {});
       }, this.options.cloudPullIntervalMs);
     }
 
@@ -247,7 +247,8 @@ export class SyncEngine {
   stopScheduler(): void {
     this.editSub?.unsubscribe();
     this.editSub = null;
-    this.localDebouncer?.cancel();
+    // Flush (not cancel) any pending local write so stopping never drops edits.
+    this.localDebouncer?.flush();
     this.localDebouncer = null;
     this.cloudDebouncer?.cancel();
     this.cloudDebouncer = null;
@@ -263,20 +264,31 @@ export class SyncEngine {
     });
   }
 
-  private runCloudCycle(
+  /**
+   * Run the full cloud sync cycle: `memory → local → cloud → memory`, then
+   * clear the dirty tracker on success. Errors from individual steps are
+   * already emitted as `sync-failed` events by `sync()` and are re-thrown here
+   * so awaiting callers (e.g. `TenantManager.sync()`) can react.
+   *
+   * The step-level dedup inside `sync()` collapses overlapping cycles from any
+   * combination of callers (debouncer, pull backstop timer, manual sync).
+   */
+  async runCloudCycle(
     tenant: Tenant | undefined,
     dirtyTracker?: ReactiveFlag,
-  ): void {
-    void (async () => {
-      try {
-        await this.sync('memory', 'local', tenant);
-        await this.sync('local', 'cloud', tenant);
-        await this.sync('local', 'memory', tenant);
-        dirtyTracker?.clear();
-      } catch (err) {
-        log.sync.error('cloud sync failed: %O', err);
-      }
-    })();
+  ): Promise<SyncResult> {
+    const results = await this.run(tenant, [
+      ['memory', 'local'],
+      ['local', 'cloud'],
+      ['local', 'memory'],
+    ]);
+    dirtyTracker?.clear();
+    const cloud = results[1];
+    return {
+      entitiesUpdated: cloud.changesForB.length,
+      conflictsResolved: cloud.changesForA.length,
+      partitionsSynced: cloud.changesForA.length + cloud.changesForB.length,
+    };
   }
 
   // ── Lazy hydration ─────────────────────────────────────

@@ -26,14 +26,9 @@ export class Debouncer {
     }
   }
 
-  /** Whether a call is currently pending. */
-  get pending(): boolean {
-    return this.timer !== null || this.maxTimer !== null;
-  }
-
   /** Run `fn` immediately if a call is pending; otherwise do nothing. */
   flush(): void {
-    if (this.pending) this.fire();
+    if (this.timer !== null || this.maxTimer !== null) this.fire();
   }
 
   /** Cancel any pending call without invoking `fn`. */

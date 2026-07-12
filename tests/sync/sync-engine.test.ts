@@ -540,7 +540,7 @@ describe('SyncEngine scheduler', () => {
     engine.stopScheduler();
   });
 
-  it('stopScheduler cancels a pending debounced flush', () => {
+  it('stopScheduler flushes a pending local write (and cancels cloud)', () => {
     vi.useFakeTimers();
     const { engine, eventBus } = makeEngine({ cloud: true });
     const syncSpy = vi.spyOn(engine, 'sync');
@@ -549,8 +549,12 @@ describe('SyncEngine scheduler', () => {
     emitEdit(eventBus);
     engine.stopScheduler();
 
+    // The pending local debounce is flushed synchronously on stop; the cloud
+    // debouncer is cancelled, so only memory→local runs and no timer fires after.
+    expect(syncSpy).toHaveBeenCalledTimes(1);
+    expect(syncSpy).toHaveBeenCalledWith('memory', 'local', undefined);
     vi.advanceTimersByTime(10000);
-    expect(syncSpy).not.toHaveBeenCalled();
+    expect(syncSpy).toHaveBeenCalledTimes(1);
     syncSpy.mockRestore();
   });
 
@@ -613,11 +617,10 @@ describe('SyncEngine scheduler', () => {
 
   it('dispose stops scheduler', () => {
     vi.useFakeTimers();
-    const { engine, eventBus } = makeEngine({ cloud: true });
+    const { engine } = makeEngine({ cloud: true });
     const syncSpy = vi.spyOn(engine, 'sync');
 
     engine.startScheduler(undefined, true);
-    emitEdit(eventBus);
     engine.dispose();
 
     vi.advanceTimersByTime(10000);

@@ -81,6 +81,10 @@ export type SyncEngine = {
     tenant: Tenant | undefined,
     steps: ReadonlyArray<[SyncLocation, SyncLocation]>,
   ): Promise<SyncBetweenResult[]>;
+  runCloudCycle(
+    tenant: Tenant | undefined,
+    dirtyTracker?: ReactiveFlag,
+  ): Promise<SyncResult>;
   ensurePartition(
     tenant: Tenant | undefined,
     entityName: string,

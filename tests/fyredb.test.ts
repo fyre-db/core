@@ -899,6 +899,11 @@ describe('FyreDb', () => {
       expect(() => resolveOptions({ localFlushDebounceMs: 1000, localFlushMaxWaitMs: 500 }))
         .toThrow('localFlushMaxWaitMs');
     });
+
+    it('rejects cloudSyncMaxWaitMs below the debounce window', () => {
+      expect(() => resolveOptions({ cloudSyncDebounceMs: 10000, cloudSyncMaxWaitMs: 5000 }))
+        .toThrow('cloudSyncMaxWaitMs');
+    });
   });
 });
 
