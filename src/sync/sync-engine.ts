@@ -9,13 +9,15 @@ import type { BlobMigration } from '@/schema/migration';
 import type { DataAdapter, AllIndexes } from '@/persistence';
 import { parseCompositeKey } from '@/utils';
 import type { ReactiveFlag } from '@/utils';
+import { Debouncer } from '@/utils';
+import type { Subscription } from 'rxjs';
 import type { ResolvedFyreDbOptions } from '../options';
 import { SyncError } from './errors';
 import { FyreDbError } from '@/errors';
 import type {
   SyncLocation, SyncQueueItem, SyncEvent,
   SyncEnqueueResult, SyncBetweenResult,
-  SyncEntityChange,
+  SyncEntityChange, SyncResult,
 } from './types';
 import { syncBetween } from './unified';
 import type { PartitionFilter } from './unified';
@@ -184,9 +186,24 @@ export class SyncEngine {
 
   // ── Scheduler ──────────────────────────────────────────
 
-  private localTimer: ReturnType<typeof setInterval> | null = null;
   private cloudTimer: ReturnType<typeof setInterval> | null = null;
+  private localDebouncer: Debouncer | null = null;
+  private cloudDebouncer: Debouncer | null = null;
+  private editSub: Subscription | null = null;
 
+  /**
+   * Start edit-driven persistence for the active tenant.
+   *
+   * - **Local flush** (`memory → local`): debounced on user edits.
+   * - **Cloud sync** (`memory → local → cloud → memory`): debounced on user
+   *   edits, so pushes happen shortly after editing settles instead of on a
+   *   fixed cadence.
+   * - **Cloud pull backstop**: a periodic timer runs the same cloud cycle so an
+   *   idle device (making no edits) still receives remote changes.
+   *
+   * Only non-`sync` (user-originated) entity events arm the debouncers, so
+   * imported remote changes never re-trigger a sync.
+   */
   startScheduler(
     tenant: Tenant | undefined,
     hasCloud: boolean,
@@ -197,41 +214,81 @@ export class SyncEngine {
     }
     this.stopScheduler();
 
-    this.localTimer = setInterval(() => {
-      this.sync('memory', 'local', tenant).catch((err: unknown) => {
-        log.sync.error('local flush failed: %O', err);
-      });
-    }, this.options.localFlushIntervalMs);
+    this.localDebouncer = new Debouncer(
+      () => { this.flushLocal(tenant); },
+      this.options.localFlushDebounceMs,
+      this.options.localFlushMaxWaitMs,
+    );
 
     if (hasCloud) {
+      this.cloudDebouncer = new Debouncer(
+        () => { void this.runCloudCycle(tenant, dirtyTracker).catch(() => {}); },
+        this.options.cloudSyncDebounceMs,
+        this.options.cloudSyncMaxWaitMs,
+      );
       this.cloudTimer = setInterval(() => {
-        void (async () => {
-          try {
-            await this.sync('local', 'cloud', tenant);
-            await this.sync('local', 'memory', tenant);
-            dirtyTracker?.clear();
-          } catch (err) {
-            log.sync.error('cloud sync failed: %O', err);
-          }
-        })();
-      }, this.options.cloudSyncIntervalMs);
+        void this.runCloudCycle(tenant, dirtyTracker).catch(() => {});
+      }, this.options.cloudPullIntervalMs);
     }
 
-    log.sync('scheduler started (local=%dms, cloud=%dms)',
-      this.options.localFlushIntervalMs,
-      this.options.cloudSyncIntervalMs,
+    this.editSub = this.entityEventBus.all$.subscribe((evt) => {
+      if (evt.source === 'sync') return;
+      this.localDebouncer?.schedule();
+      this.cloudDebouncer?.schedule();
+    });
+
+    log.sync('scheduler started (local=%d/%dms, cloud=%d/%dms, pull=%dms)',
+      this.options.localFlushDebounceMs, this.options.localFlushMaxWaitMs,
+      this.options.cloudSyncDebounceMs, this.options.cloudSyncMaxWaitMs,
+      this.options.cloudPullIntervalMs,
     );
   }
 
   stopScheduler(): void {
-    if (this.localTimer !== null) {
-      clearInterval(this.localTimer);
-      this.localTimer = null;
-    }
+    this.editSub?.unsubscribe();
+    this.editSub = null;
+    // Flush (not cancel) any pending local write so stopping never drops edits.
+    this.localDebouncer?.flush();
+    this.localDebouncer = null;
+    this.cloudDebouncer?.cancel();
+    this.cloudDebouncer = null;
     if (this.cloudTimer !== null) {
       clearInterval(this.cloudTimer);
       this.cloudTimer = null;
     }
+  }
+
+  private flushLocal(tenant: Tenant | undefined): void {
+    this.sync('memory', 'local', tenant).catch((err: unknown) => {
+      log.sync.error('local flush failed: %O', err);
+    });
+  }
+
+  /**
+   * Run the full cloud sync cycle: `memory → local → cloud → memory`, then
+   * clear the dirty tracker on success. Errors from individual steps are
+   * already emitted as `sync-failed` events by `sync()` and are re-thrown here
+   * so awaiting callers (e.g. `TenantManager.sync()`) can react.
+   *
+   * The step-level dedup inside `sync()` collapses overlapping cycles from any
+   * combination of callers (debouncer, pull backstop timer, manual sync).
+   */
+  async runCloudCycle(
+    tenant: Tenant | undefined,
+    dirtyTracker?: ReactiveFlag,
+  ): Promise<SyncResult> {
+    const results = await this.run(tenant, [
+      ['memory', 'local'],
+      ['local', 'cloud'],
+      ['local', 'memory'],
+    ]);
+    dirtyTracker?.clear();
+    const cloud = results[1];
+    return {
+      entitiesUpdated: cloud.changesForB.length,
+      conflictsResolved: cloud.changesForA.length,
+      partitionsSynced: cloud.changesForA.length + cloud.changesForB.length,
+    };
   }
 
   // ── Lazy hydration ─────────────────────────────────────

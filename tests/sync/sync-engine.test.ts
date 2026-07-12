@@ -8,15 +8,17 @@ import { EventBus } from '@/reactive';
 import type { EntityEvent } from '@/reactive';
 import { Store } from '@/store';
 import { DEFAULT_OPTIONS } from '../helpers';
+import type { ResolvedFyreDbOptions } from '@/index';
 
-function makeEngine(opts?: { cloud?: boolean }) {
-  const store = new Store(DEFAULT_OPTIONS);
+function makeEngine(opts?: { cloud?: boolean; options?: ResolvedFyreDbOptions }) {
+  const options = opts?.options ?? DEFAULT_OPTIONS;
+  const store = new Store(options);
   const local = createDataAdapter();
   const cloud = opts?.cloud ? createDataAdapter() : undefined;
   const hlcRef = { current: createHlc('test') };
   const eventBus = new EventBus<EntityEvent>();
   const syncEventBus = new EventBus<SyncEvent>();
-  const engine = new SyncEngine(store, local, cloud, ['task'], hlcRef, eventBus, syncEventBus, DEFAULT_OPTIONS);
+  const engine = new SyncEngine(store, local, cloud, ['task'], hlcRef, eventBus, syncEventBus, options);
   return { engine, store, local, cloud, hlcRef, eventBus, syncEventBus };
 }
 
@@ -520,33 +522,50 @@ describe('SyncEngine scheduler', () => {
     vi.useRealTimers();
   });
 
-  it('startScheduler begins periodic timers', () => {
+  const emitEdit = (bus: EventBus<EntityEvent>) =>
+    bus.emit({ entityName: 'task', source: 'user', updates: ['t1'], deletes: [] });
+
+  const SHORT: ResolvedFyreDbOptions = {
+    ...DEFAULT_OPTIONS,
+    localFlushDebounceMs: 20,
+    localFlushMaxWaitMs: 40,
+    cloudSyncDebounceMs: 20,
+    cloudSyncMaxWaitMs: 40,
+  };
+
+  it('starts and stops without throwing', () => {
     vi.useFakeTimers();
-    const { engine } = makeEngine();
+    const { engine } = makeEngine({ cloud: true });
     engine.startScheduler(undefined, true);
     engine.stopScheduler();
   });
 
-  it('stopScheduler clears timers', () => {
+  it('stopScheduler flushes a pending local write (and cancels cloud)', () => {
     vi.useFakeTimers();
-    const { engine } = makeEngine();
+    const { engine, eventBus } = makeEngine({ cloud: true });
     const syncSpy = vi.spyOn(engine, 'sync');
 
     engine.startScheduler(undefined, true);
+    emitEdit(eventBus);
     engine.stopScheduler();
 
+    // The pending local debounce is flushed synchronously on stop; the cloud
+    // debouncer is cancelled, so only memory→local runs and no timer fires after.
+    expect(syncSpy).toHaveBeenCalledTimes(1);
+    expect(syncSpy).toHaveBeenCalledWith('memory', 'local', undefined);
     vi.advanceTimersByTime(10000);
-    expect(syncSpy).not.toHaveBeenCalled();
+    expect(syncSpy).toHaveBeenCalledTimes(1);
     syncSpy.mockRestore();
   });
 
-  it('local flush interval calls sync memory→local on tick', () => {
+  it('local flush fires memory→local after a user edit (debounced)', () => {
     vi.useFakeTimers();
-    const { engine } = makeEngine();
+    const { engine, eventBus } = makeEngine({ cloud: true });
     const syncSpy = vi.spyOn(engine, 'sync');
 
     engine.startScheduler(undefined, true);
-    vi.advanceTimersByTime(2000);
+    emitEdit(eventBus);
+    vi.advanceTimersByTime(DEFAULT_OPTIONS.localFlushDebounceMs);
 
     expect(syncSpy).toHaveBeenCalledWith('memory', 'local', undefined);
 
@@ -554,15 +573,31 @@ describe('SyncEngine scheduler', () => {
     syncSpy.mockRestore();
   });
 
-  it('does not start cloud timer when hasCloud is false', () => {
+  it('sync-source events do not trigger a flush', () => {
     vi.useFakeTimers();
-    const { engine } = makeEngine();
+    const { engine, eventBus } = makeEngine({ cloud: true });
+    const syncSpy = vi.spyOn(engine, 'sync');
+
+    engine.startScheduler(undefined, true);
+    eventBus.emit({ entityName: 'task', source: 'sync', updates: ['t1'], deletes: [] });
+    vi.advanceTimersByTime(DEFAULT_OPTIONS.cloudSyncMaxWaitMs + 1000);
+
+    expect(syncSpy).not.toHaveBeenCalled();
+    engine.stopScheduler();
+    syncSpy.mockRestore();
+  });
+
+  it('does not arm cloud sync when hasCloud is false', () => {
+    vi.useFakeTimers();
+    const { engine, eventBus } = makeEngine({ cloud: false });
     const syncSpy = vi.spyOn(engine, 'sync');
 
     engine.startScheduler(undefined, false);
-    vi.advanceTimersByTime(10000);
+    emitEdit(eventBus);
+    vi.advanceTimersByTime(DEFAULT_OPTIONS.cloudSyncMaxWaitMs + 1000);
 
     const calls = syncSpy.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
     expect(calls.every(c => c[0] === 'memory' && c[1] === 'local')).toBe(true);
 
     engine.stopScheduler();
@@ -571,7 +606,7 @@ describe('SyncEngine scheduler', () => {
 
   it('stopScheduler is safe to call multiple times', () => {
     vi.useFakeTimers();
-    const { engine } = makeEngine();
+    const { engine } = makeEngine({ cloud: false });
 
     engine.startScheduler(undefined, false);
     expect(() => {
@@ -582,7 +617,7 @@ describe('SyncEngine scheduler', () => {
 
   it('dispose stops scheduler', () => {
     vi.useFakeTimers();
-    const { engine } = makeEngine();
+    const { engine } = makeEngine({ cloud: true });
     const syncSpy = vi.spyOn(engine, 'sync');
 
     engine.startScheduler(undefined, true);
@@ -594,21 +629,23 @@ describe('SyncEngine scheduler', () => {
   });
 
   it('catches local flush errors without crashing', async () => {
-    const { engine, local } = makeEngine();
+    const { engine, local, eventBus } = makeEngine({ cloud: true, options: SHORT });
     local.read = async () => { throw new Error('write failed'); };
 
     engine.startScheduler(undefined, true);
-    await new Promise(r => setTimeout(r, 3000));
+    emitEdit(eventBus);
+    await new Promise(r => setTimeout(r, 100));
     await engine.drain().catch(() => {});
     engine.stopScheduler();
   });
 
   it('catches cloud sync errors without crashing', async () => {
-    const { engine, cloud } = makeEngine({ cloud: true });
+    const { engine, cloud, eventBus } = makeEngine({ cloud: true, options: SHORT });
     cloud!.read = async () => { throw new Error('network failed'); };
 
     engine.startScheduler(undefined, true);
-    await new Promise(r => setTimeout(r, 3000));
+    emitEdit(eventBus);
+    await new Promise(r => setTimeout(r, 100));
     await engine.drain().catch(() => {});
     engine.stopScheduler();
   });

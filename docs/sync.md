@@ -29,21 +29,27 @@ When you call `fyredb.tenants.open(id)`, the framework:
 2. Syncs local → memory (loads entities into Map)
 3. If cloud is unreachable, loads from local only and emits a `sync-failed` event
 
-### 2. Periodic (background)
+### 2. Edit-driven (background)
 
-| Direction | Interval | Default |
-|-----------|----------|---------|
-| memory → local | `localFlushIntervalMs` | 2 seconds |
-| local → cloud | `cloudSyncIntervalMs` | 5 minutes |
+| Direction | Trigger | Default window |
+|-----------|---------|----------------|
+| memory → local | debounced on user edits | 500ms settle / 3s ceiling |
+| memory → local → cloud → memory | debounced on user edits | 10s settle / 60s ceiling |
+| local → cloud → memory (pull backstop) | periodic timer `cloudPullIntervalMs` | 5 minutes |
 
-After cloud sync, local → memory is run to merge any remote changes back into the app.
+User edits arm both debouncers; the cloud cycle also runs on a periodic pull
+timer so an idle device still receives remote changes. After each cloud cycle,
+local → memory merges remote changes back into the app.
 
 ```typescript
 const fyredb = new FyreDb({
   // ...
   options: {
-    localFlushIntervalMs: 2000,    // default: 2s
-    cloudSyncIntervalMs: 300000,   // default: 5m
+    localFlushDebounceMs: 500,     // default: 500ms
+    localFlushMaxWaitMs: 3000,     // default: 3s
+    cloudSyncDebounceMs: 10000,    // default: 10s
+    cloudSyncMaxWaitMs: 60000,     // default: 60s
+    cloudPullIntervalMs: 300000,   // default: 5m
   },
 });
 ```

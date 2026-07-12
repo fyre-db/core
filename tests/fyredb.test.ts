@@ -407,6 +407,7 @@ describe('FyreDb', () => {
         appId: 'test',
         entities: [taskDef],
         localAdapter: makeAdapter(),
+        cloudAdapter: makeAdapter(),
         deviceId: 'dev',
       });
       const tenant = await fyredb.tenants.create({
@@ -418,6 +419,25 @@ describe('FyreDb', () => {
       const repo = fyredb.repo(taskDef) as Repository<Task>;
       repo.save({ title: 'Test', done: false });
       expect(fyredb.isDirty).toBe(true);
+    });
+
+    it('stays clean in local-only mode (no cloud adapter)', async () => {
+      const taskDef = defineEntity<Task>('task');
+      fyredb = new FyreDb({
+        appId: 'test',
+        entities: [taskDef],
+        localAdapter: makeAdapter(),
+        deviceId: 'dev',
+      });
+      const tenant = await fyredb.tenants.create({
+        name: 'Test',
+        meta: { bucket: 'test' },
+      });
+      await fyredb.tenants.open(tenant.id);
+
+      const repo = fyredb.repo(taskDef) as Repository<Task>;
+      repo.save({ title: 'Test', done: false });
+      expect(fyredb.isDirty).toBe(false);
     });
 
     it('clears after sync', async () => {
@@ -860,19 +880,29 @@ describe('FyreDb', () => {
       expect(opts.tombstoneRetentionMs).toBe(0);
     });
 
-    it('rejects zero cloudSyncIntervalMs', () => {
-      expect(() => resolveOptions({ cloudSyncIntervalMs: 0 }))
-        .toThrow('Invalid cloudSyncIntervalMs');
+    it('rejects zero cloudPullIntervalMs', () => {
+      expect(() => resolveOptions({ cloudPullIntervalMs: 0 }))
+        .toThrow('Invalid cloudPullIntervalMs');
     });
 
-    it('rejects negative localFlushIntervalMs', () => {
-      expect(() => resolveOptions({ localFlushIntervalMs: -100 }))
-        .toThrow('Invalid localFlushIntervalMs');
+    it('rejects negative localFlushDebounceMs', () => {
+      expect(() => resolveOptions({ localFlushDebounceMs: -100 }))
+        .toThrow('Invalid localFlushDebounceMs');
     });
 
-    it('rejects Infinity cloudSyncIntervalMs', () => {
-      expect(() => resolveOptions({ cloudSyncIntervalMs: Infinity }))
-        .toThrow('Invalid cloudSyncIntervalMs');
+    it('rejects Infinity cloudSyncDebounceMs', () => {
+      expect(() => resolveOptions({ cloudSyncDebounceMs: Infinity }))
+        .toThrow('Invalid cloudSyncDebounceMs');
+    });
+
+    it('rejects localFlushMaxWaitMs below the debounce window', () => {
+      expect(() => resolveOptions({ localFlushDebounceMs: 1000, localFlushMaxWaitMs: 500 }))
+        .toThrow('localFlushMaxWaitMs');
+    });
+
+    it('rejects cloudSyncMaxWaitMs below the debounce window', () => {
+      expect(() => resolveOptions({ cloudSyncDebounceMs: 10000, cloudSyncMaxWaitMs: 5000 }))
+        .toThrow('cloudSyncMaxWaitMs');
     });
   });
 });

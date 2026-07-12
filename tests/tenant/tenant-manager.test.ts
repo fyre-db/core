@@ -31,6 +31,7 @@ function stubSyncEngine(): SyncEngineType {
       deduplicated: false,
     }),
     run: async () => [],
+    runCloudCycle: async () => ({ entitiesUpdated: 0, conflictsResolved: 0, partitionsSynced: 0 }),
     ensurePartition: async () => {},
     startScheduler: () => {},
     stopScheduler: () => {},

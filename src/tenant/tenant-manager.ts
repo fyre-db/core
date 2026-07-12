@@ -288,18 +288,7 @@ export class TenantManager implements TenantManagerType {
     if (!tenant) throw new TenantError('No tenant loaded', { kind: 'no-tenant-loaded' });
     if (!this.deps.cloudAdapter) throw new SyncError('No cloud adapter configured', { kind: 'cloud-not-configured' });
 
-    const results = await this.deps.syncEngine.run(tenant, [
-      ['memory', 'local'],
-      ['local', 'cloud'],
-      ['local', 'memory'],
-    ]);
-    this.deps.dirtyTracker.clear();
-    const cloudResult = results[1];
-    return {
-      entitiesUpdated: cloudResult.changesForB.length,
-      conflictsResolved: cloudResult.changesForA.length,
-      partitionsSynced: cloudResult.changesForA.length + cloudResult.changesForB.length,
-    };
+    return this.deps.syncEngine.runCloudCycle(tenant, this.deps.dirtyTracker);
   }
 
   // Security note: credential strings cannot be zeroed in JS — see open() comment.
