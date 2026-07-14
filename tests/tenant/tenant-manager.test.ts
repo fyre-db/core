@@ -168,6 +168,86 @@ describe('TenantListManager persistence', () => {
     await flush();
     expect(reloaded.find('tc')?.id).toBe('tc');
   });
+
+  it('drops a local tenant that no longer exists in cloud (deleted elsewhere)', async () => {
+    // Ghost-tenant regression: a tenant deleted on another device is gone from
+    // cloud but still present locally. Cloud is authoritative, so init() must
+    // REMOVE it rather than resurrect it via a union merge.
+    const old = new Date('2026-01-01T00:00:00Z');
+    const local = createDataAdapter();
+    await seedTenantList(local, [
+      makeTenant('keep', {}, { createdAt: old, updatedAt: old }),
+      makeTenant('ghost', {}, { createdAt: old, updatedAt: old }),
+    ]);
+    const cloud = createDataAdapter();
+    // Cloud has only 'keep' — 'ghost' was deleted on another device.
+    await seedTenantList(cloud, [makeTenant('keep', {}, { createdAt: old, updatedAt: old })]);
+
+    const list = new TenantListManager(local, cloud, DEFAULT_OPTIONS);
+    await flush();
+
+    expect(list.find('keep')?.id).toBe('keep');
+    expect(list.find('ghost')).toBeUndefined();
+    expect(list.tenants).toHaveLength(1);
+
+    // The pruned list must be written back to local so the ghost stays gone.
+    const reloaded = new TenantListManager(local, undefined, DEFAULT_OPTIONS);
+    await flush();
+    expect(reloaded.find('ghost')).toBeUndefined();
+  });
+
+  it('keeps a local-only tenant newer than the cloud snapshot (unsynced offline creation)', async () => {
+    // The offline-create exception: a tenant created locally while cloud was
+    // unreachable is local-only but POST-dates the cloud snapshot, so it must
+    // be preserved rather than treated as a deletion.
+    const oldCloud = new Date('2026-01-01T00:00:00Z');
+    const newerLocal = new Date('2026-02-01T00:00:00Z');
+    const local = createDataAdapter();
+    await seedTenantList(local, [
+      makeTenant('synced', {}, { createdAt: oldCloud, updatedAt: oldCloud }),
+      makeTenant('offline', {}, { createdAt: newerLocal, updatedAt: newerLocal }),
+    ]);
+    const cloud = createDataAdapter();
+    await seedTenantList(cloud, [makeTenant('synced', {}, { createdAt: oldCloud, updatedAt: oldCloud })]);
+
+    const list = new TenantListManager(local, cloud, DEFAULT_OPTIONS);
+    await flush();
+
+    expect(list.find('synced')?.id).toBe('synced');
+    expect(list.find('offline')?.id).toBe('offline');
+    expect(list.tenants).toHaveLength(2);
+  });
+
+  it('does not wipe the local list when cloud is empty (never-synced)', async () => {
+    // An empty cloud read (first run, or cloud reachable but no blob yet) must
+    // NOT be read as "everything was deleted" — newestRemote is 0 so every
+    // local tenant post-dates it and is preserved.
+    const old = new Date('2026-01-01T00:00:00Z');
+    const local = createDataAdapter();
+    await seedTenantList(local, [makeTenant('t1', {}, { createdAt: old, updatedAt: old })]);
+    const cloud = createDataAdapter(); // empty — read returns null
+
+    const list = new TenantListManager(local, cloud, DEFAULT_OPTIONS);
+    await flush();
+
+    expect(list.find('t1')?.id).toBe('t1');
+    expect(list.tenants).toHaveLength(1);
+  });
+
+  it('takes the newer cloud edit for a tenant present in both (LWW)', async () => {
+    const old = new Date('2026-01-01T00:00:00Z');
+    const newer = new Date('2026-03-01T00:00:00Z');
+    const local = createDataAdapter();
+    await seedTenantList(local, [makeTenant('t1', {}, { name: 'Old Name', createdAt: old, updatedAt: old })]);
+    const cloud = createDataAdapter();
+    await seedTenantList(cloud, [makeTenant('t1', {}, { name: 'New Name', createdAt: old, updatedAt: newer })]);
+
+    const list = new TenantListManager(local, cloud, DEFAULT_OPTIONS);
+    await flush();
+
+    expect(list.find('t1')?.name).toBe('New Name');
+    expect(list.tenants).toHaveLength(1);
+  });
 });
 
 describe('TenantManager', () => {
