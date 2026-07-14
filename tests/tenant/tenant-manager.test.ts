@@ -135,6 +135,19 @@ describe('TenantListManager persistence', () => {
     expect(data).not.toBeNull();
   });
 
+  it('is a no-op when adding a tenant whose id already exists', async () => {
+    // Covers add()'s dedup guard: re-adding an existing id must not duplicate
+    // the entry or overwrite it.
+    const adapter = createDataAdapter();
+    const now = new Date('2026-03-23T12:00:00Z');
+    const list = new TenantListManager(adapter, undefined, DEFAULT_OPTIONS);
+    await list.add({ id: 't1', name: 'Original', encrypted: false, meta: {}, createdAt: now, updatedAt: now });
+    await list.add({ id: 't1', name: 'Duplicate', encrypted: false, meta: {}, createdAt: now, updatedAt: now });
+
+    expect(list.tenants).toHaveLength(1);
+    expect(list.find('t1')?.name).toBe('Original');
+  });
+
   it('still persists locally when the cloud save fails', async () => {
     // init() succeeds (cloud read returns empty); only the cloud *write* in
     // persist() rejects. add() should swallow the cloud failure (logged warn)
@@ -246,6 +259,62 @@ describe('TenantListManager persistence', () => {
     await flush();
 
     expect(list.find('t1')?.name).toBe('New Name');
+    expect(list.tenants).toHaveLength(1);
+  });
+
+  it('keeps the newer local edit for a tenant present in both (LWW)', async () => {
+    // Covers reconcile line 136: local copy is newer than cloud, so the local
+    // edit wins over the cloud snapshot.
+    const old = new Date('2026-01-01T00:00:00Z');
+    const newer = new Date('2026-05-01T00:00:00Z');
+    const local = createDataAdapter();
+    await seedTenantList(local, [makeTenant('t1', {}, { name: 'Local New', createdAt: old, updatedAt: newer })]);
+    const cloud = createDataAdapter();
+    await seedTenantList(cloud, [makeTenant('t1', {}, { name: 'Cloud Old', createdAt: old, updatedAt: old })]);
+
+    const list = new TenantListManager(local, cloud, DEFAULT_OPTIONS);
+    await flush();
+
+    expect(list.find('t1')?.name).toBe('Local New');
+    expect(list.tenants).toHaveLength(1);
+  });
+
+  it('adds a cloud-only tenant that does not exist locally', async () => {
+    // Covers reconcile's LWW loop when a remote tenant has no local counterpart
+    // (the `local` lookup is undefined) — it should be taken from cloud as-is.
+    const old = new Date('2026-01-01T00:00:00Z');
+    const local = createDataAdapter();
+    await seedTenantList(local, [makeTenant('mine', {}, { createdAt: old, updatedAt: old })]);
+    const cloud = createDataAdapter();
+    await seedTenantList(cloud, [
+      makeTenant('mine', {}, { createdAt: old, updatedAt: old }),
+      makeTenant('theirs', {}, { createdAt: old, updatedAt: old }),
+    ]);
+
+    const list = new TenantListManager(local, cloud, DEFAULT_OPTIONS);
+    await flush();
+
+    expect(list.find('mine')?.id).toBe('mine');
+    expect(list.find('theirs')?.id).toBe('theirs');
+    expect(list.tenants).toHaveLength(2);
+  });
+
+  it('falls back to the local list when the cloud read throws', async () => {
+    // Covers init()'s catch: a cloud read failure must leave the locally-loaded
+    // list intact (no reconciliation, no wipe).
+    const old = new Date('2026-01-01T00:00:00Z');
+    const local = createDataAdapter();
+    await seedTenantList(local, [makeTenant('t1', {}, { createdAt: old, updatedAt: old })]);
+    const cloud: DataAdapter = {
+      read: async () => { throw new Error('cloud unreachable'); },
+      write: async () => {},
+      delete: async () => false,
+    };
+
+    const list = new TenantListManager(local, cloud, DEFAULT_OPTIONS);
+    await flush();
+
+    expect(list.find('t1')?.id).toBe('t1');
     expect(list.tenants).toHaveLength(1);
   });
 });

@@ -57,8 +57,12 @@ describe('TenantListManager — local load', () => {
   });
 });
 
-describe('TenantListManager — cloud merge on init', () => {
-  it('merges union by tenant ID across local and cloud', async () => {
+describe('TenantListManager — cloud reconciliation on init', () => {
+  it('treats cloud as authoritative: drops a local-only tenant absent from cloud', async () => {
+    // A tenant present locally but not in cloud was deleted on another device.
+    // Cloud is authoritative for membership, so it must be pruned rather than
+    // resurrected via a union merge (the ghost-tenant bug). 't1' here is not
+    // newer than the cloud snapshot, so it is not a pending offline creation.
     const local = createDataAdapter();
     const cloud = createDataAdapter();
     await seed(local, [makeTenant({ id: 't1', name: 'Local 1' })]);
@@ -66,8 +70,8 @@ describe('TenantListManager — cloud merge on init', () => {
 
     const mgr = await ready(newManager(local, cloud));
 
-    expect(mgr.tenants).toHaveLength(2);
-    expect(mgr.tenants.map(t => t.id).sort()).toEqual(['t1', 't2']);
+    expect(mgr.tenants).toHaveLength(1);
+    expect(mgr.tenants.map(t => t.id)).toEqual(['t2']);
   });
 
   it('keeps the entry with the latest updatedAt when cloud is newer', async () => {
@@ -119,7 +123,7 @@ describe('TenantListManager — cloud merge on init', () => {
     expect(mgr.tenants).toHaveLength(0);
   });
 
-  it('persists the merged list back to the local adapter', async () => {
+  it('persists the reconciled list back to the local adapter', async () => {
     const local = createDataAdapter();
     const cloud = createDataAdapter();
     await seed(local, [makeTenant({ id: 't1', name: 'Local' })]);
@@ -127,9 +131,10 @@ describe('TenantListManager — cloud merge on init', () => {
 
     await ready(newManager(local, cloud));
 
-    // A fresh manager reading local only should now see both tenants.
+    // The local-only 't1' (absent from authoritative cloud, not newer than the
+    // snapshot) is pruned; a fresh local-only manager sees just the cloud tenant.
     const reopened = await ready(newManager(local));
-    expect(reopened.tenants.map(t => t.id).sort()).toEqual(['t1', 't2']);
+    expect(reopened.tenants.map(t => t.id)).toEqual(['t2']);
   });
 });
 
