@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { createDataAdapter } from '../helpers';
 import { createHlc } from '@/hlc';
 import { EventBus } from '@/reactive';
@@ -212,6 +212,95 @@ describe('SyncEngine scheduler', () => {
 
     engine.startScheduler(undefined, true);
     engine.stopScheduler();
+  });
+});
+
+type FakeEventTarget = {
+  addEventListener: (type: string, fn: () => void) => void;
+  removeEventListener: (type: string, fn: () => void) => void;
+  dispatch: (type: string) => void;
+  count: (type: string) => number;
+};
+
+function makeFakeTarget(): FakeEventTarget {
+  const listeners = new Map<string, Set<() => void>>();
+  return {
+    addEventListener: (type, fn) => {
+      const set = listeners.get(type) ?? new Set<() => void>();
+      set.add(fn);
+      listeners.set(type, set);
+    },
+    removeEventListener: (type, fn) => { listeners.get(type)?.delete(fn); },
+    dispatch: (type) => { for (const fn of listeners.get(type) ?? []) fn(); },
+    count: (type) => listeners.get(type)?.size ?? 0,
+  };
+}
+
+describe('SyncEngine scheduler flush-on-unload', () => {
+  let win: FakeEventTarget;
+  let doc: FakeEventTarget & { visibilityState: string };
+
+  beforeEach(() => {
+    win = makeFakeTarget();
+    doc = { ...makeFakeTarget(), visibilityState: 'hidden' };
+    vi.stubGlobal('window', win);
+    vi.stubGlobal('document', doc);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('flushes the pending local write on pagehide', () => {
+    const { engine, eventBus } = makeEngine();
+    const syncSpy = vi.spyOn(engine, 'sync');
+
+    engine.startScheduler(undefined, true);
+    emitEdit(eventBus);
+    win.dispatch('pagehide');
+
+    expect(syncSpy).toHaveBeenCalledWith('memory', 'local', undefined);
+    engine.stopScheduler();
+    syncSpy.mockRestore();
+  });
+
+  it('flushes the pending local write when the page becomes hidden', () => {
+    const { engine, eventBus } = makeEngine();
+    const syncSpy = vi.spyOn(engine, 'sync');
+
+    engine.startScheduler(undefined, true);
+    emitEdit(eventBus);
+    doc.dispatch('visibilitychange');
+
+    expect(syncSpy).toHaveBeenCalledWith('memory', 'local', undefined);
+    engine.stopScheduler();
+    syncSpy.mockRestore();
+  });
+
+  it('does not flush on visibilitychange while the page is visible', () => {
+    const { engine, eventBus } = makeEngine();
+    const syncSpy = vi.spyOn(engine, 'sync');
+
+    engine.startScheduler(undefined, true);
+    emitEdit(eventBus);
+    doc.visibilityState = 'visible';
+    doc.dispatch('visibilitychange');
+
+    expect(syncSpy).not.toHaveBeenCalled();
+    engine.stopScheduler();
+    syncSpy.mockRestore();
+  });
+
+  it('removes the unload listeners on stopScheduler', () => {
+    const { engine } = makeEngine();
+
+    engine.startScheduler(undefined, true);
+    expect(win.count('pagehide')).toBe(1);
+    expect(doc.count('visibilitychange')).toBe(1);
+
+    engine.stopScheduler();
+    expect(win.count('pagehide')).toBe(0);
+    expect(doc.count('visibilitychange')).toBe(0);
   });
 });
 
