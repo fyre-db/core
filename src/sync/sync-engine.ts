@@ -190,6 +190,8 @@ export class SyncEngine {
   private localDebouncer: Debouncer | null = null;
   private cloudDebouncer: Debouncer | null = null;
   private editSub: Subscription | null = null;
+  private unloadFlushHandler: (() => void) | null = null;
+  private visibilityFlushHandler: (() => void) | null = null;
 
   /**
    * Start edit-driven persistence for the active tenant.
@@ -237,6 +239,8 @@ export class SyncEngine {
       this.cloudDebouncer?.schedule();
     });
 
+    this.registerUnloadFlush();
+
     log.sync('scheduler started (local=%d/%dms, cloud=%d/%dms, pull=%dms)',
       this.options.localFlushDebounceMs, this.options.localFlushMaxWaitMs,
       this.options.cloudSyncDebounceMs, this.options.cloudSyncMaxWaitMs,
@@ -247,6 +251,7 @@ export class SyncEngine {
   stopScheduler(): void {
     this.editSub?.unsubscribe();
     this.editSub = null;
+    this.unregisterUnloadFlush();
     // Flush (not cancel) any pending local write so stopping never drops edits.
     this.localDebouncer?.flush();
     this.localDebouncer = null;
@@ -262,6 +267,36 @@ export class SyncEngine {
     this.sync('memory', 'local', tenant).catch((err: unknown) => {
       log.sync.error('local flush failed: %O', err);
     });
+  }
+
+  /**
+   * Flush the pending local write when the page is hidden or torn down (reload,
+   * navigation, tab close). Without this a debounced `memory → local` write can
+   * be lost if the page unloads inside the debounce window, dropping a just-made
+   * edit. Cloud propagation is intentionally not attempted here (it is
+   * async/network and unreliable during unload); the higher-HLC local row wins
+   * the next startup merge and is re-pushed to cloud then.
+   */
+  private registerUnloadFlush(): void {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const flush = (): void => { this.localDebouncer?.flush(); };
+    this.unloadFlushHandler = flush;
+    this.visibilityFlushHandler = (): void => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', this.visibilityFlushHandler);
+  }
+
+  private unregisterUnloadFlush(): void {
+    if (this.unloadFlushHandler !== null && typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', this.unloadFlushHandler);
+    }
+    if (this.visibilityFlushHandler !== null && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.visibilityFlushHandler);
+    }
+    this.unloadFlushHandler = null;
+    this.visibilityFlushHandler = null;
   }
 
   /**
