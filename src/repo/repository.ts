@@ -1,6 +1,6 @@
 import { startWith, map, distinctUntilChanged } from 'rxjs/operators';
 import type { Hlc } from '@/hlc';
-import { tick } from '@/hlc';
+import { tick, compareHlc } from '@/hlc';
 import type { EntityDefinition, BaseEntity } from '@/schema';
 import { formatEntityId } from '@/schema';
 import { generateId, parseEntityKey, parseCompositeKey } from '@/utils';
@@ -51,6 +51,32 @@ export class Repository<T> {
     return this.store.getEntity(entityKey, id) as (T & BaseEntity) | undefined;
   }
 
+  /**
+   * Mint the next HLC for a mutation of `id`, causally after **every** clock
+   * already recorded for that key: the device clock, the id's current entity
+   * hlc, and any live tombstone hlc for the id. Ticking only against
+   * `this.hlc.current` is unsafe — after a reload the device clock restarts at
+   * `{timestamp:0}` and only catches up on the next sync, so a save/delete
+   * could otherwise mint an hlc that is not strictly newer than a value or
+   * tombstone already in the store and lose the subsequent merge (e.g. a
+   * reconnect being re-deleted by its own stale tombstone). Advances
+   * `this.hlc.current` to the minted value.
+   */
+  private nextHlc(
+    entityKey: string,
+    id: string,
+    existing: (T & BaseEntity) | undefined,
+  ): Hlc {
+    let reference: Hlc | undefined = existing?.hlc;
+    const tombstone = this.store.getTombstones(entityKey).get(id);
+    if (tombstone && (!reference || compareHlc(tombstone, reference) > 0)) {
+      reference = tombstone;
+    }
+    const next = tick(this.hlc.current, reference);
+    this.hlc.current = next;
+    return next;
+  }
+
   private saveToStore(partial: T & Partial<BaseEntity>): string {
     let id: string;
     let entityKey: string;
@@ -76,7 +102,7 @@ export class Repository<T> {
 
     const existing = this.store.getEntity(entityKey, id) as (T & BaseEntity) | undefined;
 
-    const nextHlc = tick(this.hlc.current);
+    const nextHlc = this.nextHlc(entityKey, id, existing);
     const now = new Date();
 
     const entity = {
@@ -119,12 +145,12 @@ export class Repository<T> {
     const entity = this.store.getEntity(entityKey, id) as (T & BaseEntity) | undefined;
     if (entity) {
       // A delete is a new operation: stamp the tombstone with a freshly ticked
-      // HLC (causally after the entity's own hlc and carrying a current
-      // timestamp). Reusing `entity.hlc` would make the tombstone equal to —
-      // not newer than — the value, and its stale timestamp could be pruned by
-      // tombstone-retention before the delete propagates, resurrecting the row.
-      const nextHlc = tick(this.hlc.current);
-      this.hlc.current = nextHlc;
+      // HLC (causally after the entity's own hlc and any prior tombstone, and
+      // carrying a current timestamp). Reusing `entity.hlc` would make the
+      // tombstone equal to — not newer than — the value, and its stale
+      // timestamp could be pruned by tombstone-retention before the delete
+      // propagates, resurrecting the row.
+      const nextHlc = this.nextHlc(entityKey, id, entity);
       this.store.setTombstone(entityKey, id, nextHlc);
     }
     const deleted = this.store.deleteEntity(entityKey, id);
