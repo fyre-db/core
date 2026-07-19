@@ -476,6 +476,80 @@ describe('SyncEngine', () => {
     expect(changed).toContain('task');
   });
 
+  it('does not clobber a concurrent in-memory write during lazy hydration', async () => {
+    const { engine, local, store } = makeEngine();
+
+    // Local holds only a (realistic, past-dated) tombstone for an id — the row
+    // was deleted earlier and never re-added on this device.
+    const tombstoneHlc = { timestamp: 500, counter: 0, nodeId: 'self' };
+    await local.write(undefined, 'task._', {
+      task: {},
+      deleted: { task: { 'task._.x': tombstoneHlc } },
+    });
+    await saveAllIndexes(local, undefined, {
+      task: { '_': { hash: 1, count: 0, deletedCount: 1, updatedAt: 500 } },
+    }, DEFAULT_OPTIONS);
+
+    // Gate the local read so hydration stays in flight while we simulate a user
+    // mutation (e.g. an OAuth callback save) landing in memory during the gap.
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const origRead = local.read.bind(local);
+    let gated = true;
+    local.read = async (tenant, key) => {
+      if (gated && key === 'task._') { gated = false; await gate; }
+      return origRead(tenant, key);
+    };
+
+    const hydration = engine.ensurePartition(undefined, 'task', '_');
+
+    // Concurrent re-add with an HLC strictly newer than the tombstone.
+    store.setEntity('task._', 'task._.x', {
+      id: 'task._.x', title: 'Reconnect',
+      hlc: { timestamp: 1000, counter: 0, nodeId: 'self' },
+    });
+
+    release();
+    await hydration;
+
+    // The newer in-memory re-add must survive; the stale tombstone must not
+    // resurrect and delete it.
+    expect(store.getEntity('task._', 'task._.x')).toBeDefined();
+    expect(store.getTombstones('task._').has('task._.x')).toBe(false);
+  });
+
+  it('hydrates normally when a concurrent empty partition reads back as null', async () => {
+    const { engine, local, store } = makeEngine();
+
+    await local.write(undefined, 'task._', {
+      task: { 'task._.l1': { id: 'task._.l1', hlc: { timestamp: 500, counter: 0, nodeId: 'loc' } } },
+      deleted: { task: {} },
+    });
+    await saveAllIndexes(local, undefined, {
+      task: { '_': { hash: 1, count: 1, deletedCount: 0, updatedAt: 500 } },
+    }, DEFAULT_OPTIONS);
+
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const origRead = local.read.bind(local);
+    let gated = true;
+    local.read = async (tenant, key) => {
+      if (gated && key === 'task._') { gated = false; await gate; }
+      return origRead(tenant, key);
+    };
+
+    const hydration = engine.ensurePartition(undefined, 'task', '_');
+
+    // A partition exists in memory but is empty with no tombstones, so
+    // store.read returns null — hydration falls back to the loaded blob.
+    await store.write(undefined, 'task._', { task: {}, deleted: { task: {} } });
+
+    release();
+    await hydration;
+
+    expect(store.getEntity('task._', 'task._.l1')).toBeDefined();
+  });
+
   it('emits one entity event when a sync moves two partitions of the same entity', async () => {
     const { engine, store, local, eventBus } = makeEngine();
     const taskEvents: { updates: string[] }[] = [];

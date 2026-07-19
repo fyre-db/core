@@ -6,7 +6,7 @@ import type { EventBus } from '@/reactive';
 import type { EntityEvent } from '@/reactive';
 import type { EntityStore } from '@/store';
 import type { BlobMigration } from '@/schema/migration';
-import type { DataAdapter, AllIndexes } from '@/persistence';
+import type { DataAdapter, AllIndexes, PartitionBlob } from '@/persistence';
 import { parseCompositeKey } from '@/utils';
 import type { ReactiveFlag } from '@/utils';
 import { Debouncer } from '@/utils';
@@ -20,6 +20,7 @@ import type {
   SyncEntityChange, SyncResult,
 } from './types';
 import { syncBetween } from './unified';
+import { mergePartition } from './merge';
 import type { PartitionFilter } from './unified';
 import { MarkerStore } from './marker-store';
 import { log } from '@/log';
@@ -355,8 +356,9 @@ export class SyncEngine {
     if (hasPartitionIndex(localIndexes, entityName, partitionKey)) {
       const blob = await this.localAdapter.read(tenant, entityKey);
       if (blob) {
-        await this.store.write(tenant, entityKey, blob);
-        this.emitEntityChangesFromBlob(entityName, blob);
+        const effective = await this.mergeConcurrentWrites(tenant, entityName, entityKey, blob);
+        await this.store.write(tenant, entityKey, effective);
+        this.emitEntityChangesFromBlob(entityName, effective);
         log.sync('lazy-loaded %s from local', entityKey);
         return;
       }
@@ -369,9 +371,10 @@ export class SyncEngine {
         if (hasPartitionIndex(cloudIndexes, entityName, partitionKey)) {
           const blob = await this.cloudAdapter.read(tenant, entityKey);
           if (blob) {
-            await this.localAdapter.write(tenant, entityKey, blob);
-            await this.store.write(tenant, entityKey, blob);
-            this.emitEntityChangesFromBlob(entityName, blob);
+            const effective = await this.mergeConcurrentWrites(tenant, entityName, entityKey, blob);
+            await this.localAdapter.write(tenant, entityKey, effective);
+            await this.store.write(tenant, entityKey, effective);
+            this.emitEntityChangesFromBlob(entityName, effective);
             log.sync('lazy-loaded %s from cloud', entityKey);
             return;
           }
@@ -384,6 +387,33 @@ export class SyncEngine {
     }
 
     log.sync('lazy-load %s: not found in any tier', entityKey);
+  }
+
+  /**
+   * Lazy hydration reads a partition from persistence and writes it into the
+   * in-memory store. Because the read is async, a user mutation (e.g. an OAuth
+   * callback saving a reconnected account) can land in memory during the gap.
+   * Blindly writing the loaded blob would clobber that un-persisted edit and
+   * resurrect a stale tombstone. When memory already holds the partition, merge
+   * the loaded blob with the current in-memory state (HLC-resolved, identical
+   * to a sync merge) so concurrent local writes win when they are causally
+   * newer. When memory has no partition (the normal case) the loaded blob is
+   * returned unchanged.
+   */
+  private async mergeConcurrentWrites(
+    tenant: Tenant | undefined,
+    entityName: string,
+    entityKey: string,
+    loadedBlob: PartitionBlob,
+  ): Promise<PartitionBlob> {
+    if (!this.store.hasPartition(entityKey)) return loadedBlob;
+    const memoryBlob = await this.store.read(tenant, entityKey);
+    if (!memoryBlob) return loadedBlob;
+    const merged = mergePartition(memoryBlob, loadedBlob, entityName);
+    return {
+      [entityName]: merged.entities,
+      deleted: { [entityName]: merged.tombstones },
+    };
   }
 
   private emitEntityChangesFromBlob(
